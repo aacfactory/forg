@@ -33,6 +33,11 @@ func (p *Process) Add(name string, unit Unit) {
 	})
 }
 
+func (p *Process) Len() (n int) {
+	n = len(p.steps)
+	return
+}
+
 func (p *Process) Start(ctx context.Context) (result <-chan Result) {
 	ctx, p.cancel = context.WithCancel(ctx)
 	results := make(chan Result, 512)
