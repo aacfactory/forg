@@ -1,4 +1,4 @@
-package codes_test
+package module_test
 
 import (
 	"fmt"
