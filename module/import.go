@@ -24,6 +24,11 @@ func (s Imports) Path(path string) (v *Import, has bool) {
 	return
 }
 
+func (s Imports) Len() (n int) {
+	n = len(s)
+	return
+}
+
 func (s Imports) Add(i *Import) {
 	_, has := s.Find(i.Ident())
 	if !has {
