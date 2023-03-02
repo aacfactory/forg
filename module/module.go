@@ -1,17 +1,18 @@
 package module
 
 import (
-	"context"
+	"bytes"
 	"fmt"
 	"github.com/aacfactory/errors"
 	"github.com/aacfactory/forg/files"
 	"golang.org/x/mod/modfile"
+	"golang.org/x/sync/singleflight"
 	"os"
 	"path/filepath"
 	"sync"
 )
 
-func New(ctx context.Context, path string) (v *Module, err error) {
+func New(path string) (v *Module, err error) {
 	path = filepath.ToSlash(path)
 	if !filepath.IsAbs(path) {
 		absolute, absoluteErr := filepath.Abs(path)
@@ -22,6 +23,11 @@ func New(ctx context.Context, path string) (v *Module, err error) {
 		}
 		path = absolute
 	}
+	if !files.ExistFile(path) {
+		err = errors.Warning("forg: new module failed").
+			WithCause(errors.Warning("forg: file was not found").WithMeta("path", path))
+		return
+	}
 	dir := filepath.ToSlash(filepath.Dir(path))
 	v = &Module{
 		Dir:       dir,
@@ -30,11 +36,24 @@ func New(ctx context.Context, path string) (v *Module, err error) {
 		Version:   "",
 		GoVersion: "",
 		Requires:  make([]*Require, 0, 1),
+		structs:   nil,
+		services:  make(map[string]*Service),
 	}
-	parseErr := v.parse(ctx)
+	v.structs = &Structs{
+		mod:    v,
+		values: sync.Map{},
+		group:  singleflight.Group{},
+	}
+	parseErr := v.parse()
 	if parseErr != nil {
 		err = errors.Warning("forg: new module failed").
 			WithCause(parseErr)
+		return
+	}
+	loadServiceErr := v.loadServices()
+	if loadServiceErr != nil {
+		err = errors.Warning("forg: new module failed").
+			WithCause(loadServiceErr)
 		return
 	}
 	return
@@ -47,11 +66,11 @@ type Module struct {
 	Version   string
 	GoVersion string
 	Requires  []*Require
-	locker    sync.Mutex
-	structs   map[string]*Struct
+	structs   *Structs
+	services  map[string]*Service
 }
 
-func (mod *Module) parse(ctx context.Context) (err error) {
+func (mod *Module) parse() (err error) {
 	gopath, hasGOPATH := GOPATH()
 	goroot, hasGOROOT := GOROOT()
 	if !hasGOPATH && !hasGOROOT {
@@ -135,7 +154,81 @@ func (mod *Module) parse(ctx context.Context) (err error) {
 	return
 }
 
+func (mod *Module) loadServices() (err error) {
+	servicesDir := filepath.ToSlash(filepath.Join(mod.Dir, "modules"))
+	entries, readServicesDirErr := os.ReadDir(servicesDir)
+	if readServicesDirErr != nil {
+		err = errors.Warning("read services dir failed").WithCause(readServicesDirErr).WithMeta("dir", servicesDir)
+		return
+	}
+	if entries == nil || len(entries) == 0 {
+		return
+	}
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		docFilename := filepath.ToSlash(filepath.Join(servicesDir, entry.Name(), "doc.go"))
+		if !files.ExistFile(docFilename) {
+			continue
+		}
+		service, loaded, loadErr := tryLoadService(mod, docFilename)
+		if loadErr != nil {
+			err = errors.Warning("load service failed").WithCause(loadErr).WithMeta("file", docFilename)
+			return
+		}
+		if !loaded {
+			continue
+		}
+		_, exist := mod.services[service.Name]
+		if exist {
+			err = errors.Warning("load service failed").WithCause(errors.Warning("forg: services was duplicated")).WithMeta("service", service.Name)
+			return
+		}
+		mod.services[service.Name] = service
+	}
+	return
+}
+
 func (mod *Module) getStruct(importer string, name string) (structure *Struct, err error) {
 
+	return
+}
+
+func (mod *Module) String() (s string) {
+	buf := bytes.NewBuffer([]byte{})
+	_, _ = buf.WriteString(fmt.Sprintf("name: %s\n", mod.Name))
+	_, _ = buf.WriteString(fmt.Sprintf("version: %s\n", mod.Version))
+	_, _ = buf.WriteString(fmt.Sprintf("goversion: %s\n", mod.GoVersion))
+	for _, require := range mod.Requires {
+		_, _ = buf.WriteString(fmt.Sprintf("requre: %s@%s", require.Name, require.Version))
+		if require.Replace != nil {
+			_, _ = buf.WriteString(fmt.Sprintf("=> %s", require.Replace.Name))
+			if require.Replace.Version != "" {
+				_, _ = buf.WriteString(fmt.Sprintf("@%s", require.Replace.Version))
+			}
+		}
+		_, _ = buf.WriteString("\n")
+	}
+	for _, service := range mod.services {
+		_, _ = buf.WriteString(fmt.Sprintf("service: %s", service.Name))
+		if len(service.Components) > 0 {
+			_, _ = buf.WriteString("component: ")
+			for i, component := range service.Components {
+				if i == 0 {
+					_, _ = buf.WriteString(fmt.Sprintf("%s", component.Indent))
+				} else {
+					_, _ = buf.WriteString(fmt.Sprintf(", %s", component.Indent))
+				}
+			}
+		}
+		_, _ = buf.WriteString("\n")
+		if len(service.Functions) > 0 {
+			for _, function := range service.Functions {
+				_, _ = buf.WriteString(fmt.Sprintf("fn: %s\n", function.Name()))
+			}
+		}
+	}
+	s = buf.String()
 	return
 }
