@@ -13,6 +13,10 @@ import (
 )
 
 func New(path string) (v *Module, err error) {
+	v, err = NewWithWork(path, "")
+	return
+}
+func NewWithWork(path string, workPath string) (v *Module, err error) {
 	path = filepath.ToSlash(path)
 	if !filepath.IsAbs(path) {
 		absolute, absoluteErr := filepath.Abs(path)
@@ -49,6 +53,65 @@ func New(path string) (v *Module, err error) {
 		err = errors.Warning("forg: new module failed").
 			WithCause(parseErr)
 		return
+	}
+	if workPath != "" {
+		work, parseWorkErr := parseWork(workPath)
+		if parseWorkErr != nil {
+			err = errors.Warning("forg: new module failed").
+				WithCause(parseWorkErr)
+			return
+		}
+		if len(work.Uses) > 0 {
+			for modulePath, moduleDir := range work.Uses {
+				replaced := false
+				for _, require := range v.Requires {
+					if require.Name == modulePath && require.Replace != nil {
+						require.Replace = &Require{
+							Dir:      moduleDir,
+							Name:     modulePath,
+							Version:  "",
+							Replace:  nil,
+							Indirect: false,
+							Module:   nil,
+						}
+						replaced = true
+						break
+					}
+				}
+				if !replaced {
+					v.Requires = append(v.Requires, &Require{
+						Dir:      moduleDir,
+						Name:     modulePath,
+						Version:  "",
+						Replace:  nil,
+						Indirect: false,
+						Module:   nil,
+					})
+				}
+			}
+		}
+		if len(work.Replaces) > 0 {
+			for _, replace := range work.Replaces {
+				replaced := false
+				for _, require := range v.Requires {
+					if require.Name == replace.Name && require.Replace != nil {
+						require.Replace = &Require{
+							Dir:      replace.Replace.Dir,
+							Name:     replace.Replace.Name,
+							Version:  replace.Replace.Version,
+							Replace:  nil,
+							Indirect: false,
+							Module:   nil,
+						}
+						replaced = true
+						break
+					}
+				}
+				if !replaced {
+					v.Requires = append(v.Requires, replace)
+				}
+			}
+		}
 	}
 	loadServiceErr := v.loadServices()
 	if loadServiceErr != nil {
