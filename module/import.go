@@ -2,8 +2,28 @@ package module
 
 import (
 	"fmt"
+	"go/ast"
 	"strings"
 )
+
+func newImportsFromAstFileImports(specs []*ast.ImportSpec) (v Imports) {
+	v = Imports{}
+	if specs == nil || len(specs) == 0 {
+		return
+	}
+	for _, spec := range specs {
+		path := strings.ReplaceAll(spec.Path.Value, "\"", "")
+		alias := ""
+		if spec.Name != nil && spec.Name.Name != "" {
+			alias = spec.Name.Name
+		}
+		v.Add(&Import{
+			Alias: alias,
+			Path:  path,
+		})
+	}
+	return
+}
 
 // Imports 一个fn文件一个，所以key不会重复，
 type Imports map[string]*Import
