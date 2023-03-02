@@ -47,6 +47,9 @@ func (sts *Structs) get(ctx context.Context, importer string, name string) (v *S
 type Struct struct {
 	Importer string
 	Name     string
+	Package  string
+	Ident    string
+	Fields   []*Element
 }
 
 func (st *Struct) Read(ctx context.Context) (result interface{}, err error) {
