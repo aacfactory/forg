@@ -1,5 +1,9 @@
+github.com/aacfactory/cases v1.1.0 h1:oY7wSX57PJav72ZDFmmdmWPrEUXjc5zh8ckDAJM4iSQ=
+github.com/aacfactory/cases v1.1.0/go.mod h1:Utk93dgZ/xXw2GTSM1QU2y1+R4LDEUVel2LtO09Mxt0=
 github.com/aacfactory/errors v1.13.3 h1:jKhRx8DqxrF5YG7GQrRphh0W43SWNoTP+59UFjd33wk=
 github.com/aacfactory/errors v1.13.3/go.mod h1:WUwbURzkHAraSqTIy6QGhq/W7TL+piTYHzdi/bbpk5s=
+github.com/aacfactory/gcg v1.0.4 h1:uUCdTIigQBqb9bIKTXp0Kx4tfgg6SXN+TDq6KFDJGiI=
+github.com/aacfactory/gcg v1.0.4/go.mod h1:YfcsMjXvaTSGsBFhjmpgEKL63JqKA1UUKpc56h6jkvE=
 github.com/rs/xid v1.4.0 h1:qd7wPTDkN6KQx2VmMBLrpHkiyQwgFXRnkOLacUiaSNY=
 github.com/rs/xid v1.4.0/go.mod h1:trrq9SKmegXys3aeAKXMUTdJsYXVwGY3RLcfgqegfbg=
 github.com/tidwall/gjson v1.14.4 h1:uo0p8EbA09J7RQaflQ1aBRffTR7xedD2bcIVSYxLnkM=
@@ -15,3 +19,7 @@ golang.org/x/mod v0.8.0 h1:LUYupSeNrTNCGzR/hVBk2NHZO4hXcVaW1k4Qx7rjPx8=
 golang.org/x/mod v0.8.0/go.mod h1:iBbtSCu2XBx23ZKBPSOrRkjjQPZFPuis4dIYUhu/chs=
 golang.org/x/sync v0.1.0 h1:wsuoTGHzEhffawBOhz5CYhcrV4IdKZbEyZjBMuTp12o=
 golang.org/x/sync v0.1.0/go.mod h1:RxMgew5VJxzue5/jJTE5uejpjVlOe/izrB70Jof72aM=
+golang.org/x/sys v0.0.0-20220722155257-8c9f86f7a55f h1:v4INt8xihDGvnrfjMDVXGxw9wrfxYyCjk0KbXjhR55s=
+golang.org/x/sys v0.0.0-20220722155257-8c9f86f7a55f/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
+golang.org/x/tools v0.1.12 h1:VveCTK38A2rkS8ZqFY25HIDFscX5X9OoEhJd3quQmXU=
+golang.org/x/tools v0.1.12/go.mod h1:hNGJHUnrk76NpqgfD5Aqm5Crs+Hm0VOH/i9J2+nxYbc=
