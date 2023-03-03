@@ -2,6 +2,7 @@ package module
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"github.com/aacfactory/errors"
 	"github.com/aacfactory/forg/files"
@@ -9,6 +10,7 @@ import (
 	"golang.org/x/sync/singleflight"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 )
 
@@ -253,8 +255,32 @@ func (mod *Module) loadServices() (err error) {
 	return
 }
 
-func (mod *Module) getStruct(importer string, name string) (structure *Struct, err error) {
+func (mod *Module) loadStruct(ctx context.Context, importer string, name string) (structure *Struct, err error) {
+	structure, err = mod.structs.load(ctx, importer, name)
+	return
+}
 
+func (mod *Module) matchMod(path string) (modPath string, modDir string, has bool) {
+	if strings.Index(path, mod.Path) == 0 {
+		modPath = mod.Path
+		modDir = mod.Dir
+		has = true
+		return
+	}
+	for _, require := range mod.Requires {
+		if strings.Index(path, require.Name) == 0 {
+			if require.Replace == nil {
+				modPath = require.Name
+				modDir = require.Dir
+				has = true
+				return
+			}
+			modPath = require.Replace.Name
+			modDir = require.Replace.Dir
+			has = true
+			return
+		}
+	}
 	return
 }
 
