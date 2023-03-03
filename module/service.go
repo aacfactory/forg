@@ -41,6 +41,7 @@ func tryLoadService(mod *Module, filename string) (service *Service, has bool, e
 	if doc == "" {
 		return
 	}
+	path := filepath.ToSlash(filepath.Join(mod.Path, "modules", f.Name.Name))
 	annotations, parseAnnotationsErr := ParseAnnotations(doc)
 	if parseAnnotationsErr != nil {
 		err = errors.Warning("forg: parse service failed").WithCause(parseAnnotationsErr).WithMeta("file", filename)
@@ -57,6 +58,7 @@ func tryLoadService(mod *Module, filename string) (service *Service, has bool, e
 	service = &Service{
 		mod:         mod,
 		Dir:         filepath.ToSlash(filepath.Dir(filename)),
+		Path:        path,
 		Name:        strings.ToLower(name),
 		Internal:    hasInternal,
 		Title:       title,
@@ -82,6 +84,7 @@ func tryLoadService(mod *Module, filename string) (service *Service, has bool, e
 type Service struct {
 	mod         *Module
 	Dir         string
+	Path        string
 	Name        string
 	Internal    bool
 	Title       string
@@ -157,9 +160,12 @@ func (service *Service) loadFunctions() (err error) {
 					WithCause(parseAnnotationsErr)
 				return
 			}
+
 			service.Functions = append(service.Functions, &Function{
 				mod:             service.mod,
 				hostFileImports: fileImports,
+				hostServiceName: service.Name,
+				path:            service.Path,
 				decl:            funcDecl,
 				Ident:           funcDecl.Name.Name,
 				ConstIdent:      constIdent,
