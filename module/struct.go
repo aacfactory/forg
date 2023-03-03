@@ -142,7 +142,7 @@ func (st *Struct) parse(ctx context.Context) (err error) {
 		} else {
 			sf.Annotations = Annotations{}
 		}
-		element, elementErr := newElement(field.Type, st.mod, st.Path, fileImports)
+		element, elementErr := newElement(ctx, field.Type, st.mod, st.Path, fileImports)
 		if elementErr != nil {
 			err = errors.Warning("forg: parse struct failed").WithCause(elementErr).
 				WithMeta("path", st.Path).WithMeta("name", st.Name).

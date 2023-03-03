@@ -1,6 +1,9 @@
 package module
 
-import "go/ast"
+import (
+	"context"
+	"go/ast"
+)
 
 const (
 	BuiltinKind = ElementKind(iota + 1)
@@ -20,7 +23,37 @@ type Element struct {
 	Y      *Element
 }
 
-func newElement(expr ast.Expr, mod *Module, path string, fileImports Imports) (element *Element, err error) {
+func newElement(ctx context.Context, expr ast.Expr, mod *Module, path string, fileImports Imports) (element *Element, err error) {
+
+	return
+}
+
+func tryNewBuiltinElement(ctx context.Context, expr ast.Expr, mod *Module, path string, fileImports Imports) (element *Element, ok bool, err error) {
+
+	return
+}
+
+func tryNewSameScopeElement(ctx context.Context, expr ast.Expr, mod *Module, path string, fileImports Imports) (element *Element, ok bool, err error) {
+
+	return
+}
+
+func tryNewSelectorElement(ctx context.Context, expr ast.Expr, mod *Module, path string, fileImports Imports) (element *Element, ok bool, err error) {
+
+	return
+}
+
+func tryNewStarElement(ctx context.Context, expr ast.Expr, mod *Module, path string, fileImports Imports) (element *Element, ok bool, err error) {
+
+	return
+}
+
+func tryNewArrayElement(ctx context.Context, expr ast.Expr, mod *Module, path string, fileImports Imports) (element *Element, ok bool, err error) {
+
+	return
+}
+
+func tryNewMapElement(ctx context.Context, expr ast.Expr, mod *Module, path string, fileImports Imports) (element *Element, ok bool, err error) {
 
 	return
 }
