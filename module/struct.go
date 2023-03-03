@@ -68,11 +68,13 @@ func (sts *Structs) load(ctx context.Context, path string, name string) (v *Stru
 type StructField struct {
 	Name        string
 	Annotations Annotations
+	Tags        map[string]string
 	Element     *Element
 }
 
 type Struct struct {
 	mod         *Module
+	fileImports Imports
 	Path        string
 	Name        string
 	Annotations Annotations
@@ -85,7 +87,7 @@ func (st *Struct) parse(ctx context.Context) (err error) {
 			WithMeta("path", st.Path).WithMeta("name", st.Name)
 		return
 	}
-	typ, typeErr := st.loadType(ctx)
+	typ, fileImports, typeErr := st.loadType(ctx)
 	if typeErr != nil {
 		err = errors.Warning("forg: parse struct failed").WithCause(typeErr).
 			WithMeta("path", st.Path).WithMeta("name", st.Name)
@@ -103,14 +105,57 @@ func (st *Struct) parse(ctx context.Context) (err error) {
 
 	for _, field := range typ.Fields.List {
 		// todo 组合struct的解析
-
 		// todo 多个name，以一个name来append一个field，有这些name的fields
-
+		if field.Names == nil || len(field.Names) == 0 {
+			// todo 组合struct的解析 ???
+			continue
+		}
+		if len(field.Names) > 1 {
+			continue
+		}
+		name := field.Names[0].Name
+		if !ast.IsExported(name) {
+			continue
+		}
+		tags := make(map[string]string)
+		if field.Tag != nil && field.Tag.Value != "" {
+			tags = parseFieldTag(field.Tag.Value)
+		}
+		if jsonName, hasJsonName := tags["json"]; hasJsonName && jsonName == "-" {
+			continue
+		}
+		sf := &StructField{
+			Name:        name,
+			Annotations: nil,
+			Tags:        tags,
+			Element:     nil,
+		}
+		if field.Doc != nil && field.Doc.Text() != "" {
+			annotations, parseAnnotationsErr := ParseAnnotations(field.Doc.Text())
+			if parseAnnotationsErr != nil {
+				err = errors.Warning("forg: parse struct failed").WithCause(parseAnnotationsErr).
+					WithMeta("path", st.Path).WithMeta("name", st.Name).
+					WithMeta("field", name)
+				return
+			}
+			sf.Annotations = annotations
+		} else {
+			sf.Annotations = Annotations{}
+		}
+		element, elementErr := newElement(field.Type, st.mod, st.Path, fileImports)
+		if elementErr != nil {
+			err = errors.Warning("forg: parse struct failed").WithCause(elementErr).
+				WithMeta("path", st.Path).WithMeta("name", st.Name).
+				WithMeta("field", name)
+			return
+		}
+		sf.Element = element
+		st.Fields = append(st.Fields, sf)
 	}
 	return
 }
 
-func (st *Struct) loadType(ctx context.Context) (typ *ast.StructType, err error) {
+func (st *Struct) loadType(ctx context.Context) (typ *ast.StructType, fileImports Imports, err error) {
 	if ctx.Err() != nil {
 		err = errors.Warning("forg: get struct type from source file failed").WithCause(ctx.Err())
 		return
@@ -190,6 +235,7 @@ func (st *Struct) loadType(ctx context.Context) (typ *ast.StructType, err error)
 						st.Annotations = Annotations{}
 					}
 					typ = structType
+					fileImports = newImportsFromAstFileImports(sf.Imports)
 					return
 				}
 			}
