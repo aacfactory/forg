@@ -100,6 +100,54 @@ func (typ *Type) Key() (key string) {
 	return
 }
 
+func (typ *Type) GetPath() (path string) {
+	if typ.Path != "" {
+		path = typ.Path
+		return
+	}
+	if typ.Kind == BuiltinKind {
+		return
+	}
+	switch typ.Kind {
+	case PointerKind, ArrayKind:
+		path = typ.Elements[0].GetPath()
+		break
+	case MapKind:
+		path = typ.Elements[1].GetPath()
+		break
+	}
+	return
+}
+
+func (typ *Type) GetParadigmPaths() (paths []string) {
+	paths = make([]string, 0, 1)
+	if typ.Paradigms != nil && len(typ.Paradigms) > 0 {
+		for _, paradigm := range typ.Paradigms {
+			if paradigm.Types != nil && len(paradigm.Types) > 0 {
+				for _, t := range paradigm.Types {
+					path := t.GetPath()
+					if path != "" {
+						paths = append(paths, path)
+					}
+				}
+			}
+		}
+		return
+	}
+	if typ.Kind == BuiltinKind {
+		return
+	}
+	switch typ.Kind {
+	case PointerKind, ArrayKind:
+		paths = typ.Elements[0].GetParadigmPaths()
+		break
+	case MapKind:
+		paths = typ.Elements[1].GetParadigmPaths()
+		break
+	}
+	return
+}
+
 type TypeScope struct {
 	Path    string
 	Imports Imports
@@ -340,5 +388,67 @@ func (types *Types) tryParseBuiltinType(expr ast.Expr, scope *TypeScope) (typ *T
 
 func (types *Types) scanType(ctx context.Context, typ *Type, scope *TypeScope) (err error) {
 
+	return
+}
+
+func isContextType(expr ast.Expr, scope *TypeScope) (ok bool) {
+	e, isSelector := expr.(*ast.SelectorExpr)
+	if !isSelector {
+		return
+	}
+	if e.X == nil {
+		return
+	}
+	ident, isIdent := e.X.(*ast.Ident)
+	if !isIdent {
+		return
+	}
+	pkg := ident.Name
+	if pkg == "" {
+		return
+	}
+	if e.Sel == nil {
+		return
+	}
+	ok = e.Sel.Name == "Context"
+	if !ok {
+		return
+	}
+	importer, has := scope.Imports.Find(pkg)
+	if !has {
+		return
+	}
+	ok = importer.Path == "context"
+	return
+}
+
+func isCodeErrorType(expr ast.Expr, scope *TypeScope) (ok bool) {
+	e, isSelector := expr.(*ast.SelectorExpr)
+	if !isSelector {
+		return
+	}
+	if e.X == nil {
+		return
+	}
+	ident, isIdent := e.X.(*ast.Ident)
+	if !isIdent {
+		return
+	}
+	pkg := ident.Name
+	if pkg == "" {
+		return
+	}
+	if e.Sel == nil {
+		return
+	}
+	ok = e.Sel.Name == "CodeError"
+	if !ok {
+		return
+	}
+	importer, has := scope.Imports.Find(pkg)
+	if !has {
+		return
+	}
+	ok = importer.Path == "github.com/aacfactory/errors"
 	return
 }
