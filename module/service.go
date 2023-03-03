@@ -131,29 +131,29 @@ func (service *Service) loadFunctions() (err error) {
 			if !strings.Contains(doc, "@fn") {
 				continue
 			}
-			name := funcDecl.Name.Name
-			if name[0] < 'a' || name[0] > 'z' {
+			ident := funcDecl.Name.Name
+			if ast.IsExported(ident) {
 				err = errors.Warning("forg: parse func name failed").
 					WithMeta("file", filename).
-					WithMeta("func", funcDecl.Name.Name).
-					WithCause(errors.Warning("forg: func name must be lower camel format"))
+					WithMeta("func", ident).
+					WithCause(errors.Warning("forg: func name must not be exported"))
 				return
 			}
-			nameAtoms, parseNameErr := cases.LowerCamel().Parse(name)
+			nameAtoms, parseNameErr := cases.LowerCamel().Parse(ident)
 			if parseNameErr != nil {
 				err = errors.Warning("forg: parse func name failed").
 					WithMeta("file", filename).
-					WithMeta("func", funcDecl.Name.Name).
+					WithMeta("func", ident).
 					WithCause(parseNameErr)
 				return
 			}
 			proxyIdent := cases.Camel().Format(nameAtoms)
-			constIdent := fmt.Sprintf("_%sFn", name)
+			constIdent := fmt.Sprintf("_%sFn", ident)
 			annotations, parseAnnotationsErr := ParseAnnotations(doc)
 			if parseAnnotationsErr != nil {
 				err = errors.Warning("forg: parse func annotations failed").
 					WithMeta("file", filename).
-					WithMeta("func", funcDecl.Name.Name).
+					WithMeta("func", ident).
 					WithCause(parseAnnotationsErr)
 				return
 			}
@@ -228,11 +228,11 @@ func (service *Service) loadComponents() (err error) {
 					continue
 				}
 				ident := ts.Name.Name
-				if ident[0] < 'A' || ident[0] > 'Z' {
+				if !ast.IsExported(ident) {
 					err = errors.Warning("forg: parse component name failed").
 						WithMeta("file", filename).
 						WithMeta("component", ident).
-						WithCause(errors.Warning("forg: component name must be upper camel format"))
+						WithCause(errors.Warning("forg: component name must be exported"))
 					return
 				}
 				service.Components = append(service.Components, &Component{
