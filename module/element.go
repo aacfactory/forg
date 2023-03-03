@@ -1,5 +1,7 @@
 package module
 
+import "go/ast"
+
 const (
 	BuiltinKind = ElementKind(iota + 1)
 	StructKind
@@ -16,4 +18,9 @@ type Element struct {
 	Struct *Struct
 	X      *Element
 	Y      *Element
+}
+
+func newElement(expr ast.Expr, mod *Module, path string, fileImports Imports) (element *Element, err error) {
+
+	return
 }
