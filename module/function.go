@@ -8,9 +8,9 @@ import (
 )
 
 type FunctionField struct {
-	Import  *Import
-	Element *Element
-	Name    string
+	Import *Import
+	Type   *Type
+	Name   string
 }
 
 type Function struct {
