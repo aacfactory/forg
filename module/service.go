@@ -81,6 +81,21 @@ func tryLoadService(mod *Module, filename string) (service *Service, has bool, e
 	return
 }
 
+type Services []*Service
+
+func (services Services) Len() int {
+	return len(services)
+}
+
+func (services Services) Less(i, j int) bool {
+	return services[i].Name < services[j].Name
+}
+
+func (services Services) Swap(i, j int) {
+	services[i], services[j] = services[j], services[i]
+	return
+}
+
 type Service struct {
 	mod         *Module
 	Dir         string

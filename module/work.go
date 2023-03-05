@@ -7,6 +7,7 @@ import (
 	"golang.org/x/mod/modfile"
 	"os"
 	"path/filepath"
+	"sync"
 )
 
 func parseWork(path string) (work *Work, err error) {
@@ -14,31 +15,31 @@ func parseWork(path string) (work *Work, err error) {
 		absolute, absoluteErr := filepath.Abs(path)
 		if absoluteErr != nil {
 			err = errors.Warning("forg: parse work failed").
-				WithCause(errors.Warning("forg: get absolute representation of work file failed").WithCause(absoluteErr).WithMeta("path", path))
+				WithCause(errors.Warning("forg: get absolute representation of work file failed").WithCause(absoluteErr).WithMeta("work", path))
 			return
 		}
 		path = absolute
 	}
 	if !files.ExistFile(path) {
 		err = errors.Warning("forg: parse work failed").
-			WithCause(errors.Warning("forg: file was not found").WithMeta("path", path))
+			WithCause(errors.Warning("forg: file was not found").WithMeta("work", path))
 		return
 	}
 	dir := filepath.Dir(path)
 	path = filepath.ToSlash(path)
 	data, readErr := os.ReadFile(path)
 	if readErr != nil {
-		err = errors.Warning("forg: parse work failed").WithMeta("path", path).WithCause(readErr)
+		err = errors.Warning("forg: parse work failed").WithMeta("work", path).WithCause(readErr)
 		return
 	}
 	file, parseErr := modfile.ParseWork(path, data, nil)
 	if parseErr != nil {
-		err = errors.Warning("forg: parse work failed").WithMeta("path", path).WithCause(parseErr)
+		err = errors.Warning("forg: parse work failed").WithMeta("work", path).WithCause(parseErr)
 		return
 	}
 	work = &Work{
-		Uses:     make(map[string]string),
-		Replaces: make([]*Require, 0, 1),
+		Uses:     make([]*Module, 0, 1),
+		Replaces: make([]*Module, 0, 1),
 	}
 	if file.Use != nil && len(file.Use) > 0 {
 		for _, use := range file.Use {
@@ -46,65 +47,96 @@ func parseWork(path string) (work *Work, err error) {
 			if filepath.IsAbs(usePath) {
 				usePath = filepath.ToSlash(usePath)
 			} else {
-				usePath = filepath.Join(dir, usePath)
+				usePath = filepath.ToSlash(filepath.Join(dir, usePath))
 			}
-			module := use.ModulePath
-			if module == "" {
-				moduleFile := filepath.Join(usePath, "mod.go")
-				modData, readModErr := os.ReadFile(moduleFile)
-				if readModErr != nil {
-					err = errors.Warning("forg: parse work failed").WithMeta("path", path).
-						WithCause(errors.Warning("forg: read mod file failed").WithCause(readModErr).WithMeta("mod", moduleFile))
-					return
-				}
-				mod, parseModErr := modfile.Parse(moduleFile, modData, nil)
-				if parseModErr != nil {
-					err = errors.Warning("forg: parse work failed").WithMeta("path", path).
-						WithCause(errors.Warning("forg: parse mod file failed").WithCause(parseModErr).WithMeta("mod", moduleFile))
-					return
-				}
-				module = mod.Module.Mod.Path
+			moduleFile := filepath.ToSlash(filepath.Join(usePath, "mod.go"))
+			if !files.ExistFile(moduleFile) {
+				err = errors.Warning("forg: parse work failed").WithMeta("work", path).
+					WithCause(errors.Warning("forg: mod file was not found").
+						WithMeta("mod", moduleFile))
+				return
 			}
-			work.Uses[module] = usePath
+			modData, readModErr := os.ReadFile(moduleFile)
+			if readModErr != nil {
+				err = errors.Warning("forg: parse work failed").WithMeta("work", path).
+					WithCause(errors.Warning("forg: read mod file failed").WithCause(readModErr).WithMeta("mod", moduleFile))
+				return
+			}
+			mf, parseModErr := modfile.Parse(moduleFile, modData, nil)
+			if parseModErr != nil {
+				err = errors.Warning("forg: parse work failed").WithMeta("work", path).
+					WithCause(errors.Warning("forg: parse mod file failed").WithCause(parseModErr).WithMeta("mod", moduleFile))
+				return
+			}
+			work.Uses = append(work.Uses, &Module{
+				Dir:      usePath,
+				Path:     mf.Module.Mod.Path,
+				Version:  "",
+				Requires: nil,
+				Work:     work,
+				Replace:  nil,
+				locker:   &sync.Mutex{},
+				parsed:   false,
+				services: nil,
+				types:    nil,
+			})
 		}
 	}
 	if file.Replace != nil && len(file.Replace) > 0 {
-		gopath, hasGOPATH := GOPATH()
-		goroot, hasGOROOT := GOROOT()
-		if !hasGOPATH && !hasGOROOT {
-			err = errors.Warning("forg: parse work failed").
-				WithCause(errors.Warning("forg: GOPATH or GOROOT was not found"))
-			return
-		}
 		for _, replace := range file.Replace {
 			replaceDir := ""
-			if hasGOPATH {
-				replaceDir = filepath.Join(gopath, "pkg/mod", replace.New.Path)
-			} else if hasGOROOT {
-				replaceDir = filepath.Join(goroot, "pkg/mod", replace.New.Path)
-			}
 			if replace.New.Version != "" {
-				replaceDir = fmt.Sprintf("%s@%s", replaceDir, replace.New.Version)
+				replaceDir = filepath.Join(PKG(), fmt.Sprintf("%s@%s", replace.New.Path, replace.New.Version))
+			} else {
+				replaceDir = filepath.Join(PKG(), replace.New.Path)
 			}
 			replaceDir = filepath.ToSlash(replaceDir)
 			if !files.ExistFile(replaceDir) {
-				err = errors.Warning("forg: parse work file failed").WithMeta("path", replaceDir).WithCause(errors.Warning("forg: replace dir of require is not exist"))
+				err = errors.Warning("forg: parse work failed").WithMeta("work", path).
+					WithCause(errors.Warning("forg: replace dir was not found").WithMeta("replace", replaceDir))
 				return
 			}
-			work.Replaces = append(work.Replaces, &Require{
-				Dir:     "",
-				Name:    replace.Old.Path,
-				Version: replace.Old.Version,
-				Replace: &Require{
+			moduleFile := filepath.ToSlash(filepath.Join(replaceDir, "mod.go"))
+			if !files.ExistFile(moduleFile) {
+				err = errors.Warning("forg: parse work failed").WithMeta("work", path).
+					WithCause(errors.Warning("forg: replace mod file was not found").
+						WithMeta("mod", moduleFile))
+				return
+			}
+			modData, readModErr := os.ReadFile(moduleFile)
+			if readModErr != nil {
+				err = errors.Warning("forg: parse work failed").WithMeta("work", path).
+					WithCause(errors.Warning("forg: read replace mod file failed").WithCause(readModErr).WithMeta("mod", moduleFile))
+				return
+			}
+			mf, parseModErr := modfile.Parse(moduleFile, modData, nil)
+			if parseModErr != nil {
+				err = errors.Warning("forg: parse work failed").WithMeta("work", path).
+					WithCause(errors.Warning("forg: parse replace mod file failed").WithCause(parseModErr).WithMeta("mod", moduleFile))
+				return
+			}
+			work.Replaces = append(work.Replaces, &Module{
+				Dir:      "",
+				Path:     replace.Old.Path,
+				Version:  replace.Old.Version,
+				Requires: nil,
+				Work:     nil,
+				Replace: &Module{
 					Dir:      replaceDir,
-					Name:     replace.New.Path,
-					Version:  replace.New.Version,
+					Path:     mf.Module.Mod.Path,
+					Version:  mf.Module.Mod.Version,
+					Requires: nil,
+					Work:     nil,
 					Replace:  nil,
-					Indirect: false,
-					Module:   nil,
+					locker:   &sync.Mutex{},
+					parsed:   false,
+					services: nil,
+					types:    nil,
 				},
-				Indirect: false,
-				Module:   nil,
+				locker:   &sync.Mutex{},
+				parsed:   false,
+				services: nil,
+				types:    nil,
 			})
 		}
 	}
@@ -112,6 +144,17 @@ func parseWork(path string) (work *Work, err error) {
 }
 
 type Work struct {
-	Uses     map[string]string
-	Replaces []*Require
+	Uses     []*Module
+	Replaces []*Module
+}
+
+func (work *Work) Use(path string) (v *Module, used bool) {
+	for _, use := range work.Uses {
+		if use.Path == path {
+			v = use
+			used = true
+			break
+		}
+	}
+	return
 }

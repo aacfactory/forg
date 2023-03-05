@@ -2,13 +2,16 @@ package module
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"github.com/aacfactory/errors"
 	"github.com/aacfactory/forg/files"
+	"go/ast"
 	"golang.org/x/mod/modfile"
 	"golang.org/x/sync/singleflight"
 	"os"
 	"path/filepath"
+	"sort"
 	"sync"
 )
 
@@ -32,25 +35,10 @@ func NewWithWork(path string, workPath string) (v *Module, err error) {
 			WithCause(errors.Warning("forg: file was not found").WithMeta("path", path))
 		return
 	}
-	dir := filepath.ToSlash(filepath.Dir(path))
-	v = &Module{
-		Dir:       dir,
-		Path:      path,
-		Name:      "",
-		Version:   "",
-		GoVersion: "",
-		Requires:  make([]*Require, 0, 1),
-		types: &Types{
-			values:  sync.Map{},
-			group:   singleflight.Group{},
-			modules: make(map[string]string),
-		},
-		services: make(map[string]*Service),
-	}
-	parseErr := v.parse()
-	if parseErr != nil {
+	pkgErr := initPkgDir()
+	if pkgErr != nil {
 		err = errors.Warning("forg: new module failed").
-			WithCause(parseErr)
+			WithCause(pkgErr)
 		return
 	}
 	if workPath != "" {
@@ -60,172 +48,197 @@ func NewWithWork(path string, workPath string) (v *Module, err error) {
 				WithCause(parseWorkErr)
 			return
 		}
-		if len(work.Uses) > 0 {
-			for modulePath, moduleDir := range work.Uses {
-				replaced := false
-				for _, require := range v.Requires {
-					if require.Name == modulePath && require.Replace != nil {
-						require.Replace = &Require{
-							Dir:      moduleDir,
-							Name:     modulePath,
-							Version:  "",
-							Replace:  nil,
-							Indirect: false,
-							Module:   nil,
-						}
-						replaced = true
-						break
-					}
-				}
-				if !replaced {
-					v.Requires = append(v.Requires, &Require{
-						Dir:      moduleDir,
-						Name:     modulePath,
-						Version:  "",
-						Replace:  nil,
-						Indirect: false,
-						Module:   nil,
-					})
-				}
+		dir := filepath.Dir(path)
+		for _, use := range work.Uses {
+			if use.Dir == dir {
+				v = use
+				break
 			}
 		}
-		if len(work.Replaces) > 0 {
-			for _, replace := range work.Replaces {
-				replaced := false
-				for _, require := range v.Requires {
-					if require.Name == replace.Name && require.Replace != nil {
-						require.Replace = &Require{
-							Dir:      replace.Replace.Dir,
-							Name:     replace.Replace.Name,
-							Version:  replace.Replace.Version,
-							Replace:  nil,
-							Indirect: false,
-							Module:   nil,
-						}
-						replaced = true
-						break
-					}
-				}
-				if !replaced {
-					v.Requires = append(v.Requires, replace)
-				}
-			}
+	} else {
+		v = &Module{
+			Dir:      filepath.ToSlash(filepath.Dir(path)),
+			Path:     "",
+			Version:  "",
+			Requires: nil,
+			Work:     nil,
+			Replace:  nil,
+			locker:   &sync.Mutex{},
+			parsed:   false,
+			services: nil,
+			types:    nil,
 		}
 	}
-	v.types.modules[v.Path] = v.Dir
-	for _, require := range v.Requires {
-		requireDir := require.Dir
-		if require.Replace != nil {
-			requireDir = require.Replace.Dir
-		}
-		v.types.modules[require.Name] = requireDir
-	}
-	loadServiceErr := v.loadServices()
-	if loadServiceErr != nil {
-		err = errors.Warning("forg: new module failed").
-			WithCause(loadServiceErr)
-		return
-	}
-
 	return
 }
 
+// Module parse(extra replaces)，用extra去替换requires的replace，如果是in workspace，则替换时不考虑version
 type Module struct {
-	Dir       string
-	Path      string
-	Name      string
-	Version   string
-	GoVersion string
-	Requires  []*Require
-	services  map[string]*Service
-	types     *Types
+	Dir      string
+	Path     string
+	Version  string
+	Requires []*Module
+	Work     *Work
+	Replace  *Module
+	locker   sync.Locker
+	parsed   bool
+	services map[string]*Service
+	types    *Types
 }
 
 func (mod *Module) parse() (err error) {
-	gopath, hasGOPATH := GOPATH()
-	goroot, hasGOROOT := GOROOT()
-	if !hasGOPATH && !hasGOROOT {
-		err = errors.Warning("forg: parse module failed").
-			WithCause(errors.Warning("forg: GOPATH or GOROOT was not found"))
+	mod.locker.Lock()
+	defer mod.locker.Unlock()
+	if mod.parsed {
 		return
 	}
-	data, readErr := os.ReadFile(mod.Path)
-	if readErr != nil {
-		err = errors.Warning("forg: read mod file failed").WithMeta("path", mod.Path).WithCause(readErr)
+	if mod.Replace != nil {
+		err = mod.Replace.parse()
+		if err != nil {
+			return
+		}
+		mod.parsed = true
 		return
 	}
-	f, parseErr := modfile.Parse(mod.Path, data, nil)
-	if parseErr != nil {
-		err = errors.Warning("forg: parse mod file failed").WithMeta("path", mod.Path).WithCause(parseErr)
+
+	modFilepath := filepath.ToSlash(filepath.Join(mod.Dir, "mod.go"))
+	if !files.ExistFile(modFilepath) {
+		err = errors.Warning("forg: parse mod failed").
+			WithCause(errors.Warning("forg: mod file was not found").
+				WithMeta("file", modFilepath))
 		return
 	}
-	mod.Name = f.Module.Mod.Path
-	mod.Version = f.Module.Mod.Version
-	mod.GoVersion = f.Go.Version
-	if f.Require != nil {
-		for _, require := range f.Require {
-			name := require.Mod.Path
-			version := require.Mod.Version
-			dir := ""
-			if hasGOPATH {
-				dir = filepath.Join(gopath, "pkg/mod", fmt.Sprintf("%s@%s", name, version))
-			} else if hasGOROOT {
-				dir = filepath.Join(goroot, "pkg/mod", fmt.Sprintf("%s@%s", name, version))
+	modData, readModErr := os.ReadFile(modFilepath)
+	if readModErr != nil {
+		err = errors.Warning("forg: parse mod failed").
+			WithCause(errors.Warning("forg: read mod file failed").
+				WithCause(readModErr).
+				WithMeta("file", modFilepath))
+		return
+	}
+	mf, parseModErr := modfile.Parse(modFilepath, modData, nil)
+	if parseModErr != nil {
+		err = errors.Warning("forg: parse mod failed").
+			WithCause(errors.Warning("forg: parse mod file failed").WithCause(parseModErr).WithMeta("file", modFilepath))
+		return
+	}
+	mod.Path = mf.Module.Mod.Path
+	mod.Version = mf.Module.Mod.Version
+	mod.Requires = make([]*Module, 0, 1)
+	if mf.Require != nil && len(mf.Require) > 0 {
+		for _, require := range mf.Require {
+			if mod.Work != nil {
+				use, used := mod.Work.Use(require.Mod.Path)
+				if used {
+					mod.Requires = append(mod.Requires, use)
+					continue
+				}
 			}
-			dir = filepath.ToSlash(dir)
-			if !files.ExistFile(dir) {
-				err = errors.Warning("forg: parse mod file failed").WithMeta("path", dir).WithCause(errors.Warning("forg: require dir is not exist"))
+			requireDir := filepath.ToSlash(filepath.Join(PKG(), fmt.Sprintf("%s@%s", require.Mod.Path, require.Mod.Version)))
+			if !files.ExistFile(requireDir) {
+				err = errors.Warning("forg: parse mod failed").WithMeta("mod", mod.Path).
+					WithCause(errors.Warning("forg: require dir was not found").WithMeta("path", require.Mod.Path).WithMeta("version", require.Mod.Version))
 				return
 			}
-			mod.Requires = append(mod.Requires, &Require{
-				Dir:      dir,
-				Name:     name,
-				Version:  version,
+			mod.Requires = append(mod.Requires, &Module{
+				Dir:      requireDir,
+				Path:     require.Mod.Path,
+				Version:  require.Mod.Version,
+				Requires: nil,
+				Work:     nil,
 				Replace:  nil,
-				Indirect: require.Indirect,
-				Module:   nil,
+				locker:   &sync.Mutex{},
+				parsed:   false,
+				services: nil,
+				types:    nil,
 			})
 		}
 	}
-	if f.Replace != nil {
-		for _, replace := range f.Replace {
-			on := replace.Old.Path
-			ov := replace.Old.Version
+	if mf.Replace != nil && len(mf.Replace) > 0 {
+		for _, replace := range mf.Replace {
+			replaceDir := ""
+			if replace.New.Version != "" {
+				replaceDir = filepath.Join(PKG(), fmt.Sprintf("%s@%s", replace.New.Path, replace.New.Version))
+			} else {
+				replaceDir = filepath.Join(PKG(), replace.New.Path)
+			}
+			replaceDir = filepath.ToSlash(replaceDir)
+			if !files.ExistFile(replaceDir) {
+				err = errors.Warning("forg: parse mod failed").WithMeta("mod", mod.Path).
+					WithCause(errors.Warning("forg: replace dir was not found").WithMeta("replace", replaceDir))
+				return
+			}
+			replaceFile := filepath.ToSlash(filepath.Join(replaceDir, "mod.go"))
+			if !files.ExistFile(replaceFile) {
+				err = errors.Warning("forg: parse mod failed").WithMeta("mod", mod.Path).
+					WithCause(errors.Warning("forg: replace mod file was not found").
+						WithMeta("replace", replaceFile))
+				return
+			}
+			replaceData, readReplaceErr := os.ReadFile(replaceFile)
+			if readReplaceErr != nil {
+				err = errors.Warning("forg: parse mod failed").WithMeta("mod", mod.Path).
+					WithCause(errors.Warning("forg: read replace mod file failed").WithCause(readReplaceErr).WithMeta("replace", replaceFile))
+				return
+			}
+			rmf, parseReplaceModErr := modfile.Parse(replaceFile, replaceData, nil)
+			if parseReplaceModErr != nil {
+				err = errors.Warning("forg: parse mod failed").WithMeta("mod", mod.Path).
+					WithCause(errors.Warning("forg: parse replace mod file failed").WithCause(parseReplaceModErr).WithMeta("replace", replaceFile))
+				return
+			}
 			for _, require := range mod.Requires {
-				if require.Name == on && require.Version == ov {
-					name := replace.New.Path
-					version := replace.New.Version
-					dir := ""
-					if hasGOPATH {
-						dir = filepath.Join(gopath, "pkg/mod", name)
-					} else if hasGOROOT {
-						dir = filepath.Join(goroot, "pkg/mod", name)
-					}
-					if version != "" {
-						dir = fmt.Sprintf("%s@%s", dir, version)
-					}
-					dir = filepath.ToSlash(dir)
-					if !files.ExistFile(dir) {
-						err = errors.Warning("forg: parse mod file failed").WithMeta("path", dir).WithCause(errors.Warning("forg: replace dir of require is not exist"))
-						return
-					}
-					require.Replace = &Require{
-						Dir:      dir,
-						Name:     replace.New.Path,
-						Version:  replace.New.Version,
+				if require.Path == replace.Old.Path && require.Version == replace.Old.Version {
+					require.Replace = &Module{
+						Dir:      replaceDir,
+						Path:     rmf.Module.Mod.Path,
+						Version:  rmf.Module.Mod.Version,
+						Requires: nil,
+						Work:     nil,
 						Replace:  nil,
-						Indirect: false,
-						Module:   nil,
+						locker:   &sync.Mutex{},
+						parsed:   false,
+						services: nil,
+						types:    nil,
 					}
+				}
+			}
+		}
+	}
+	if mod.Work != nil && len(mod.Work.Replaces) > 0 && len(mod.Requires) > 0 {
+		for i, require := range mod.Requires {
+			if require.Work != nil || require.Replace != nil {
+				continue
+			}
+			for _, replace := range mod.Work.Replaces {
+				if require.Path == replace.Path {
+					mod.Requires[i] = replace
 					break
 				}
 			}
 		}
 	}
+
+	mod.types = &Types{
+		values: sync.Map{},
+		group:  singleflight.Group{},
+		mod:    mod,
+	}
+	mod.parsed = true
 	return
 }
 
-func (mod *Module) loadServices() (err error) {
+func (mod *Module) Services() (services Services, err error) {
+	mod.locker.Lock()
+	defer mod.locker.Unlock()
+	if mod.services != nil {
+		services = make([]*Service, 0, 1)
+		for _, service := range mod.services {
+			services = append(services, service)
+		}
+		sort.Sort(services)
+		return
+	}
 	servicesDir := filepath.ToSlash(filepath.Join(mod.Dir, "modules"))
 	entries, readServicesDirErr := os.ReadDir(servicesDir)
 	if readServicesDirErr != nil {
@@ -258,40 +271,56 @@ func (mod *Module) loadServices() (err error) {
 		}
 		mod.services[service.Name] = service
 	}
+	services = make([]*Service, 0, 1)
+	for _, service := range mod.services {
+		services = append(services, service)
+	}
+	sort.Sort(services)
+	return
+}
+
+func (mod *Module) findType(ctx context.Context, expr ast.Expr, scope *TypeScope) (typ *Type, err error) {
+	// todo
 	return
 }
 
 func (mod *Module) String() (s string) {
 	buf := bytes.NewBuffer([]byte{})
-	_, _ = buf.WriteString(fmt.Sprintf("name: %s\n", mod.Name))
+	_, _ = buf.WriteString(fmt.Sprintf("path: %s\n", mod.Path))
 	_, _ = buf.WriteString(fmt.Sprintf("version: %s\n", mod.Version))
-	_, _ = buf.WriteString(fmt.Sprintf("goversion: %s\n", mod.GoVersion))
 	for _, require := range mod.Requires {
-		_, _ = buf.WriteString(fmt.Sprintf("requre: %s@%s", require.Name, require.Version))
+		_, _ = buf.WriteString(fmt.Sprintf("requre: %s@%s", require.Path, require.Version))
 		if require.Replace != nil {
-			_, _ = buf.WriteString(fmt.Sprintf("=> %s", require.Replace.Name))
+			_, _ = buf.WriteString(fmt.Sprintf("=> %s", require.Replace.Path))
 			if require.Replace.Version != "" {
 				_, _ = buf.WriteString(fmt.Sprintf("@%s", require.Replace.Version))
 			}
 		}
 		_, _ = buf.WriteString("\n")
 	}
-	for _, service := range mod.services {
-		_, _ = buf.WriteString(fmt.Sprintf("service: %s", service.Name))
-		if len(service.Components) > 0 {
-			_, _ = buf.WriteString("component: ")
-			for i, component := range service.Components {
-				if i == 0 {
-					_, _ = buf.WriteString(fmt.Sprintf("%s", component.Indent))
-				} else {
-					_, _ = buf.WriteString(fmt.Sprintf(", %s", component.Indent))
+	services, servicesErr := mod.Services()
+	if servicesErr != nil {
+		_, _ = buf.WriteString("service: load failed\n")
+		_, _ = buf.WriteString(fmt.Sprintf("%+v", servicesErr))
+
+	} else {
+		for _, service := range services {
+			_, _ = buf.WriteString(fmt.Sprintf("service: %s", service.Name))
+			if len(service.Components) > 0 {
+				_, _ = buf.WriteString("component: ")
+				for i, component := range service.Components {
+					if i == 0 {
+						_, _ = buf.WriteString(fmt.Sprintf("%s", component.Indent))
+					} else {
+						_, _ = buf.WriteString(fmt.Sprintf(", %s", component.Indent))
+					}
 				}
 			}
-		}
-		_, _ = buf.WriteString("\n")
-		if len(service.Functions) > 0 {
-			for _, function := range service.Functions {
-				_, _ = buf.WriteString(fmt.Sprintf("fn: %s\n", function.Name()))
+			_, _ = buf.WriteString("\n")
+			if len(service.Functions) > 0 {
+				for _, function := range service.Functions {
+					_, _ = buf.WriteString(fmt.Sprintf("fn: %s\n", function.Name()))
+				}
 			}
 		}
 	}

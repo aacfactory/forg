@@ -131,7 +131,6 @@ func (f *Function) Parse(ctx context.Context) (err error) {
 	scope := &TypeScope{
 		Path:    f.path,
 		Imports: f.hostFileImports,
-		Mod:     f.mod,
 	}
 	// params
 	params := f.decl.Type.Params
@@ -146,6 +145,7 @@ func (f *Function) Parse(ctx context.Context) (err error) {
 		return
 	}
 	if len(params.List) == 2 {
+		// todo fn的参数和结果都先自己把expr拿出，然后在types去parse（expr+scope）
 		paramType, paramTypeErr := f.mod.types.parse(ctx, params.List[1].Type, scope)
 		if paramTypeErr != nil {
 			err = errors.Warning("forg: parse function failed").WithCause(paramTypeErr).

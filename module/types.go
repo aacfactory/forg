@@ -4,8 +4,11 @@ import (
 	"context"
 	"fmt"
 	"github.com/aacfactory/errors"
+	"github.com/aacfactory/forg/files"
 	"go/ast"
 	"golang.org/x/sync/singleflight"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"sync"
@@ -151,23 +154,49 @@ func (typ *Type) GetParadigmPaths() (paths []string) {
 type TypeScope struct {
 	Path    string
 	Imports Imports
-	Mod     *Module
+}
+
+func (scope *TypeScope) loadExpr() (expr ast.Expr, scope0 *TypeScope, err error) {
+
+	return
 }
 
 type Types struct {
-	values  sync.Map
-	group   singleflight.Group
-	modules map[string]string
+	values sync.Map
+	group  singleflight.Group
+	mod    *Module
 }
 
-func (types *Types) findModule(path string) (mod string, dir string, has bool) {
+func (types *Types) findExpr(path string, name string) (expr ast.Expr, scope TypeScope, err error) {
+	// todo 从 mod的require里取path的files，require里暂存files。
+	mod := ""
+	dir := ""
 	for mp, md := range types.modules {
 		if strings.Index(path, mp) == 0 {
 			mod = mp
 			dir = md
-			has = true
-			return
+			break
 		}
+	}
+	if mod == "" {
+		err = errors.Warning("forg: can not get module of expr").WithMeta("path", path).WithMeta("name", name)
+		return
+	}
+	subDir, cut := strings.CutPrefix(path, mod)
+	if !cut {
+		err = errors.Warning("forg: can not get location of expr").WithMeta("path", path).WithMeta("name", name).WithMeta("mod", mod)
+		return
+	}
+	dir = filepath.ToSlash(filepath.Join(dir, subDir))
+	entries, readErr := os.ReadDir(dir)
+
+	f, parseErr := files.ParseSource(dir)
+	if parseErr != nil {
+		err = errors.Warning("forg: parse source file of expr failed").
+			WithMeta("path", path).
+			WithMeta("name", name).
+			WithMeta("mod", mod).WithMeta("file", dir).WithCause(parseErr)
+		return
 	}
 	return
 }
@@ -387,7 +416,26 @@ func (types *Types) tryParseBuiltinType(expr ast.Expr, scope *TypeScope) (typ *T
 }
 
 func (types *Types) scanType(ctx context.Context, typ *Type, scope *TypeScope) (err error) {
+	switch typ.expr.(type) {
+	case *ast.Ident:
 
+		break
+	case *ast.SelectorExpr:
+
+		break
+	case *ast.StarExpr:
+
+		break
+	case *ast.ArrayType:
+
+		break
+	case *ast.MapType:
+
+		break
+	default:
+		err = errors.Warning("forg: unsupported expr").WithMeta("expr", reflect.TypeOf(typ.expr).String()).WithMeta("path", typ.Path).WithMeta("name", typ.Name)
+		return
+	}
 	return
 }
 
