@@ -118,10 +118,7 @@ func (service *Service) loadFunctions() (err error) {
 		return
 	}
 	for _, entry := range entries {
-		if entry.IsDir() || entry.Name() == "doc.go" {
-			continue
-		}
-		if filepath.Ext(entry.Name()) != ".go" {
+		if entry.IsDir() || entry.Name() == "doc.go" || strings.HasSuffix(entry.Name(), "_test.go") || filepath.Ext(entry.Name()) != ".go" {
 			continue
 		}
 		filename := filepath.Join(service.Dir, entry.Name())
@@ -208,10 +205,7 @@ func (service *Service) loadComponents() (err error) {
 		return
 	}
 	for _, entry := range entries {
-		if entry.IsDir() || entry.Name() == "doc.go" {
-			continue
-		}
-		if filepath.Ext(entry.Name()) != ".go" {
+		if entry.IsDir() || entry.Name() == "doc.go" || strings.HasSuffix(entry.Name(), "_test.go") || filepath.Ext(entry.Name()) != ".go" {
 			continue
 		}
 		filename := filepath.Join(componentsDir, entry.Name())

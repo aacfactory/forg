@@ -279,7 +279,12 @@ func (mod *Module) Services() (services Services, err error) {
 	return
 }
 
-func (mod *Module) findType(ctx context.Context, expr ast.Expr, scope *TypeScope) (typ *Type, err error) {
+func (mod *Module) findRequire(ctx context.Context, path string) (require *Module, has bool) {
+	// todo
+	return
+}
+
+func (mod *Module) findFile(ctx context.Context, path string, match func(file *ast.File) (ok bool)) (file *ast.File, err error) {
 	// todo
 	return
 }
