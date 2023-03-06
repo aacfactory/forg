@@ -159,12 +159,6 @@ type Types struct {
 	mod    *Module
 }
 
-func (types *Types) findExpr(path string, name string) (expr ast.Expr, scope TypeScope, err error) {
-	// todo 从 mod的require里取path的files，require里暂存files。
-
-	return
-}
-
 func (types *Types) parse(ctx context.Context, expr ast.Expr, scope *TypeScope) (typ *Type, err error) {
 	bt, btOk := types.tryParseBuiltinType(expr, scope)
 	if btOk {

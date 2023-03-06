@@ -129,6 +129,7 @@ func (f *Function) Parse(ctx context.Context) (err error) {
 		return
 	}
 	scope := &TypeScope{
+		Mod:     f.mod,
 		Path:    f.path,
 		Imports: f.hostFileImports,
 	}
