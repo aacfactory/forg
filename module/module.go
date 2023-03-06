@@ -171,7 +171,7 @@ func (mod *Module) parse(ctx context.Context, host *Module) (err error) {
 				if filepath.IsAbs(replace.New.Path) {
 					replaceDir = replace.New.Path
 				} else {
-					replaceDir = filepath.Join(PKG(), replace.New.Path)
+					replaceDir = filepath.Join(mod.Dir, replace.New.Path)
 				}
 			}
 			replaceDir = filepath.ToSlash(replaceDir)
