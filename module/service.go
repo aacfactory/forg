@@ -6,7 +6,6 @@ import (
 	"github.com/aacfactory/errors"
 	"github.com/aacfactory/forg/files"
 	"go/ast"
-	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -31,20 +30,25 @@ func (components Components) Swap(i, j int) {
 	return
 }
 
-func tryLoadService(mod *Module, filename string) (service *Service, has bool, err error) {
-	f, parseErr := files.ParseSource(filename)
-	if parseErr != nil {
-		err = errors.Warning("forg: parse service failed").WithCause(parseErr).WithMeta("file", filename)
+func tryLoadService(mod *Module, path string) (service *Service, has bool, err error) {
+	f, readErr := mod.sources.ReadFile(path, "doc.go")
+	if readErr != nil {
+		err = errors.Warning("forg: parse service failed").WithCause(readErr).WithMeta("path", path).WithMeta("file", "doc.go")
 		return
 	}
+	_, pkg := filepath.Split(path)
+	if pkg != f.Name.Name {
+		err = errors.Warning("forg: parse service failed").WithCause(errors.Warning("pkg must be same as dir name")).WithMeta("path", path).WithMeta("file", "doc.go")
+		return
+	}
+
 	doc := f.Doc.Text()
 	if doc == "" {
 		return
 	}
-	path := filepath.ToSlash(filepath.Join(mod.Path, "modules", f.Name.Name))
 	annotations, parseAnnotationsErr := ParseAnnotations(doc)
 	if parseAnnotationsErr != nil {
-		err = errors.Warning("forg: parse service failed").WithCause(parseAnnotationsErr).WithMeta("file", filename)
+		err = errors.Warning("forg: parse service failed").WithCause(parseAnnotationsErr).WithMeta("path", path).WithMeta("file", "doc.go")
 		return
 	}
 	name, hasName := annotations.Get("service")
@@ -55,9 +59,9 @@ func tryLoadService(mod *Module, filename string) (service *Service, has bool, e
 	_, hasInternal := annotations.Get("internal")
 	title, _ := annotations.Get("title")
 	Description, _ := annotations.Get("description")
+
 	service = &Service{
 		mod:         mod,
-		Dir:         filepath.ToSlash(filepath.Dir(filename)),
 		Path:        path,
 		Name:        strings.ToLower(name),
 		Internal:    hasInternal,
@@ -68,12 +72,12 @@ func tryLoadService(mod *Module, filename string) (service *Service, has bool, e
 	}
 	loadFunctionsErr := service.loadFunctions()
 	if loadFunctionsErr != nil {
-		err = errors.Warning("forg: parse service failed").WithCause(loadFunctionsErr).WithMeta("file", filename)
+		err = errors.Warning("forg: parse service failed").WithCause(loadFunctionsErr).WithMeta("path", path).WithMeta("file", "doc.go")
 		return
 	}
 	loadComponentsErr := service.loadComponents()
 	if loadComponentsErr != nil {
-		err = errors.Warning("forg: parse service failed").WithCause(loadComponentsErr).WithMeta("file", filename)
+		err = errors.Warning("forg: parse service failed").WithCause(loadComponentsErr).WithMeta("path", path).WithMeta("file", "doc.go")
 		return
 	}
 	sort.Sort(service.Functions)
@@ -98,7 +102,6 @@ func (services Services) Swap(i, j int) {
 
 type Service struct {
 	mod         *Module
-	Dir         string
 	Path        string
 	Name        string
 	Internal    bool
@@ -109,26 +112,9 @@ type Service struct {
 }
 
 func (service *Service) loadFunctions() (err error) {
-	entries, readDirErr := os.ReadDir(service.Dir)
-	if readDirErr != nil {
-		err = errors.Warning("forg: read service dir failed").WithMeta("dir", service.Dir).WithCause(readDirErr)
-		return
-	}
-	if entries == nil || len(entries) == 0 {
-		return
-	}
-	for _, entry := range entries {
-		if entry.IsDir() || entry.Name() == "doc.go" || strings.HasSuffix(entry.Name(), "_test.go") || filepath.Ext(entry.Name()) != ".go" {
-			continue
-		}
-		filename := filepath.Join(service.Dir, entry.Name())
-		file, parseErr := files.ParseSource(filename)
-		if parseErr != nil {
-			err = errors.Warning("forg: parse go source file failed").WithMeta("file", filename).WithCause(parseErr)
-			return
-		}
+	err = service.mod.sources.ReadDir(service.Path, func(file *ast.File, filename string) (err error) {
 		if file.Decls == nil || len(file.Decls) == 0 {
-			continue
+			return
 		}
 		fileImports := newImportsFromAstFileImports(file.Imports)
 		for _, decl := range file.Decls {
@@ -172,7 +158,6 @@ func (service *Service) loadFunctions() (err error) {
 					WithCause(parseAnnotationsErr)
 				return
 			}
-
 			service.Functions = append(service.Functions, &Function{
 				mod:             service.mod,
 				hostFileImports: fileImports,
@@ -187,35 +172,24 @@ func (service *Service) loadFunctions() (err error) {
 				Result:          nil,
 			})
 		}
-	}
+		return
+	})
 	return
 }
 
 func (service *Service) loadComponents() (err error) {
-	componentsDir := filepath.Join(service.Dir, "components")
-	if !files.ExistFile(componentsDir) {
+	componentsPath := fmt.Sprintf("%s/components", service.Path)
+	dir, dirErr := service.mod.sources.destinationPath(componentsPath)
+	if dirErr != nil {
+		err = errors.Warning("forg: read service components dir failed").WithCause(dirErr).WithMeta("service", service.Path)
 		return
 	}
-	entries, readDirErr := os.ReadDir(componentsDir)
-	if readDirErr != nil {
-		err = errors.Warning("forg: read service components dir failed").WithMeta("dir", componentsDir).WithCause(readDirErr)
+	if !files.ExistFile(dir) {
 		return
 	}
-	if entries == nil || len(entries) == 0 {
-		return
-	}
-	for _, entry := range entries {
-		if entry.IsDir() || entry.Name() == "doc.go" || strings.HasSuffix(entry.Name(), "_test.go") || filepath.Ext(entry.Name()) != ".go" {
-			continue
-		}
-		filename := filepath.Join(componentsDir, entry.Name())
-		file, parseErr := files.ParseSource(filename)
-		if parseErr != nil {
-			err = errors.Warning("forg: parse go source file failed").WithMeta("file", componentsDir).WithCause(parseErr)
-			return
-		}
+	readErr := service.mod.sources.ReadDir(componentsPath, func(file *ast.File, filename string) (err error) {
 		if file.Decls == nil || len(file.Decls) == 0 {
-			continue
+			return
 		}
 		for _, decl := range file.Decls {
 			genDecl, ok := decl.(*ast.GenDecl)
@@ -255,7 +229,11 @@ func (service *Service) loadComponents() (err error) {
 				})
 			}
 		}
-
+		return
+	})
+	if readErr != nil {
+		err = errors.Warning("forg: read service components dir failed").WithCause(readErr).WithMeta("service", service.Path)
+		return
 	}
 	return
 }

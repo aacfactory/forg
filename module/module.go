@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 )
 
@@ -69,31 +70,42 @@ func NewWithWork(path string, workPath string) (v *Module, err error) {
 			types:    nil,
 		}
 	}
+	parseErr := v.parse(context.TODO(), nil)
+	if parseErr != nil {
+		err = errors.Warning("forg: new module failed").
+			WithCause(parseErr)
+		return
+	}
 	return
 }
 
-// Module parse(extra replaces)，用extra去替换requires的replace，如果是in workspace，则替换时不考虑version
 type Module struct {
 	Dir      string
 	Path     string
 	Version  string
-	Requires []*Module
+	Requires Requires
 	Work     *Work
 	Replace  *Module
 	locker   sync.Locker
 	parsed   bool
+	sources  *Sources
 	services map[string]*Service
 	types    *Types
 }
 
-func (mod *Module) parse() (err error) {
+func (mod *Module) parse(ctx context.Context, host *Module) (err error) {
+	if ctx.Err() != nil {
+		err = errors.Warning("forg: parse mod failed").
+			WithCause(ctx.Err())
+		return
+	}
 	mod.locker.Lock()
 	defer mod.locker.Unlock()
 	if mod.parsed {
 		return
 	}
 	if mod.Replace != nil {
-		err = mod.Replace.parse()
+		err = mod.Replace.parse(ctx, host)
 		if err != nil {
 			return
 		}
@@ -101,7 +113,7 @@ func (mod *Module) parse() (err error) {
 		return
 	}
 
-	modFilepath := filepath.ToSlash(filepath.Join(mod.Dir, "mod.go"))
+	modFilepath := filepath.ToSlash(filepath.Join(mod.Dir, "go.mod"))
 	if !files.ExistFile(modFilepath) {
 		err = errors.Warning("forg: parse mod failed").
 			WithCause(errors.Warning("forg: mod file was not found").
@@ -135,11 +147,7 @@ func (mod *Module) parse() (err error) {
 				}
 			}
 			requireDir := filepath.ToSlash(filepath.Join(PKG(), fmt.Sprintf("%s@%s", require.Mod.Path, require.Mod.Version)))
-			if !files.ExistFile(requireDir) {
-				err = errors.Warning("forg: parse mod failed").WithMeta("mod", mod.Path).
-					WithCause(errors.Warning("forg: require dir was not found").WithMeta("path", require.Mod.Path).WithMeta("version", require.Mod.Version))
-				return
-			}
+
 			mod.Requires = append(mod.Requires, &Module{
 				Dir:      requireDir,
 				Path:     require.Mod.Path,
@@ -160,7 +168,11 @@ func (mod *Module) parse() (err error) {
 			if replace.New.Version != "" {
 				replaceDir = filepath.Join(PKG(), fmt.Sprintf("%s@%s", replace.New.Path, replace.New.Version))
 			} else {
-				replaceDir = filepath.Join(PKG(), replace.New.Path)
+				if filepath.IsAbs(replace.New.Path) {
+					replaceDir = replace.New.Path
+				} else {
+					replaceDir = filepath.Join(PKG(), replace.New.Path)
+				}
 			}
 			replaceDir = filepath.ToSlash(replaceDir)
 			if !files.ExistFile(replaceDir) {
@@ -168,7 +180,7 @@ func (mod *Module) parse() (err error) {
 					WithCause(errors.Warning("forg: replace dir was not found").WithMeta("replace", replaceDir))
 				return
 			}
-			replaceFile := filepath.ToSlash(filepath.Join(replaceDir, "mod.go"))
+			replaceFile := filepath.ToSlash(filepath.Join(replaceDir, "go.mod"))
 			if !files.ExistFile(replaceFile) {
 				err = errors.Warning("forg: parse mod failed").WithMeta("mod", mod.Path).
 					WithCause(errors.Warning("forg: replace mod file was not found").
@@ -205,12 +217,34 @@ func (mod *Module) parse() (err error) {
 			}
 		}
 	}
-	if mod.Work != nil && len(mod.Work.Replaces) > 0 && len(mod.Requires) > 0 {
+	work := mod.Work
+	if host != nil && len(mod.Requires) > 0 {
+		if host.Replace != nil {
+			host = host.Replace
+		}
+		if host.Work != nil && work == nil {
+			work = host.Work
+		}
+		if host.Requires != nil {
+			for i, require := range mod.Requires {
+				if require.Work != nil || require.Replace != nil {
+					continue
+				}
+				for _, hr := range host.Requires {
+					if require.Path == hr.Path {
+						mod.Requires[i] = hr
+						break
+					}
+				}
+			}
+		}
+	}
+	if work != nil && len(work.Replaces) > 0 && len(mod.Requires) > 0 {
 		for i, require := range mod.Requires {
 			if require.Work != nil || require.Replace != nil {
 				continue
 			}
-			for _, replace := range mod.Work.Replaces {
+			for _, replace := range work.Replaces {
 				if require.Path == replace.Path {
 					mod.Requires[i] = replace
 					break
@@ -218,12 +252,15 @@ func (mod *Module) parse() (err error) {
 			}
 		}
 	}
-
+	if mod.Requires.Len() > 0 {
+		sort.Sort(sort.Reverse(mod.Requires))
+	}
 	mod.types = &Types{
 		values: sync.Map{},
 		group:  singleflight.Group{},
 		mod:    mod,
 	}
+	mod.sources = newSource(mod.Path, mod.Dir)
 	mod.parsed = true
 	return
 }
@@ -252,11 +289,12 @@ func (mod *Module) Services() (services Services, err error) {
 		if !entry.IsDir() {
 			continue
 		}
-		docFilename := filepath.ToSlash(filepath.Join(servicesDir, entry.Name(), "doc.go"))
+		path := filepath.Join(mod.Path, "modules", entry.Name())
+		docFilename := filepath.ToSlash(filepath.Join(mod.Dir, path, "doc.go"))
 		if !files.ExistFile(docFilename) {
 			continue
 		}
-		service, loaded, loadErr := tryLoadService(mod, docFilename)
+		service, loaded, loadErr := tryLoadService(mod, path)
 		if loadErr != nil {
 			err = errors.Warning("load service failed").WithCause(loadErr).WithMeta("file", docFilename)
 			return
@@ -279,13 +317,62 @@ func (mod *Module) Services() (services Services, err error) {
 	return
 }
 
-func (mod *Module) findRequire(ctx context.Context, path string) (require *Module, has bool) {
-	// todo
+func (mod *Module) findModuleByPath(ctx context.Context, path string) (v *Module, has bool, err error) {
+	if ctx.Err() != nil {
+		err = errors.Warning("forg: find module by path failed").
+			WithCause(ctx.Err())
+		return
+	}
+	if mod.Requires != nil {
+		for _, require := range mod.Requires {
+			if strings.HasPrefix(path, require.Path) {
+				parseErr := require.parse(ctx, mod)
+				if parseErr != nil {
+					err = errors.Warning("forg: find module by path failed").
+						WithCause(parseErr)
+					return
+				}
+				if require.Replace != nil {
+					require = require.Replace
+				}
+				v, has, err = require.findModuleByPath(ctx, path)
+				if has || err != nil {
+					return
+				}
+			}
+		}
+	}
+	if strings.HasPrefix(path, mod.Path) {
+		if mod.Replace != nil {
+			v = mod.Replace
+		} else {
+			v = mod
+		}
+		has = true
+		return
+	}
 	return
 }
 
-func (mod *Module) findFile(ctx context.Context, path string, match func(file *ast.File) (ok bool)) (file *ast.File, err error) {
-	// todo
+func (mod *Module) findFile(ctx context.Context, path string, match func(file *ast.File) (ok bool)) (file *ast.File, module *Module, err error) {
+	has := false
+	module, has, err = mod.findModuleByPath(ctx, path)
+	if err != nil {
+		err = errors.Warning("forg: find file failed").
+			WithCause(err).WithMeta("path", path)
+		return
+	}
+	if !has {
+		err = errors.Warning("forg: find file failed").
+			WithCause(errors.Warning("forg: file was not found")).WithMeta("path", path)
+		return
+	}
+	file, err = module.sources.FindFileInDir(path, match)
+	if err != nil {
+		err = errors.Warning("forg: find file failed").
+			WithCause(err).WithMeta("path", path)
+		return
+	}
 	return
 }
 
