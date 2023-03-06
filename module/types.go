@@ -147,8 +147,13 @@ func (typ *Type) GetParadigmPaths() (paths []string) {
 	return
 }
 
+func NewTypeScope(path string, imports Imports) (scope *TypeScope) {
+
+	return
+}
+
 type TypeScope struct {
-	Mod     *Module
+	mod     *Module
 	Path    string
 	Imports Imports
 }
@@ -156,10 +161,35 @@ type TypeScope struct {
 type Types struct {
 	values sync.Map
 	group  singleflight.Group
-	mod    *Module
 }
 
 func (types *Types) parse(ctx context.Context, expr ast.Expr, scope *TypeScope) (typ *Type, err error) {
+	switch expr.(type) {
+	case *ast.Ident:
+		e := expr.(*ast.Ident)
+		if e.Obj == nil {
+			// builtin
+			return
+		}
+
+		break
+	case *ast.SelectorExpr:
+
+		break
+	case *ast.StarExpr:
+
+		break
+	case *ast.ArrayType:
+
+		break
+	case *ast.MapType:
+
+		break
+	default:
+		err = errors.Warning("forg: unsupported expr").WithMeta("expr", reflect.TypeOf(expr).String())
+		return
+	}
+
 	bt, btOk := types.tryParseBuiltinType(expr, scope)
 	if btOk {
 		typ = bt
@@ -200,7 +230,13 @@ func (types *Types) parse(ctx context.Context, expr ast.Expr, scope *TypeScope) 
 	return
 }
 
+func (types *Types) parseStructType(ctx context.Context, name string, st *ast.StructType, scope *TypeScope) (typ *Type, err error) {
+
+	return
+}
+
 func (types *Types) tryParseBuiltinType(expr ast.Expr, scope *TypeScope) (typ *Type, ok bool) {
+
 	switch expr.(type) {
 	case *ast.Ident:
 		e := expr.(*ast.Ident)

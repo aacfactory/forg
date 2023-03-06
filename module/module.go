@@ -258,7 +258,6 @@ func (mod *Module) parse(ctx context.Context, host *Module) (err error) {
 	mod.types = &Types{
 		values: sync.Map{},
 		group:  singleflight.Group{},
-		mod:    mod,
 	}
 	mod.sources = newSource(mod.Path, mod.Dir)
 	mod.parsed = true
@@ -373,6 +372,12 @@ func (mod *Module) findFile(ctx context.Context, path string, match func(file *a
 			WithCause(err).WithMeta("path", path)
 		return
 	}
+	return
+}
+
+func (mod *Module) ParseExpr(ctx context.Context, expr ast.Expr, scope *TypeScope) (typ *Type, err error) {
+	scope.mod = mod
+	typ, err = mod.types.parse(ctx, expr, scope)
 	return
 }
 

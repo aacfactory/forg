@@ -129,7 +129,7 @@ func (f *Function) Parse(ctx context.Context) (err error) {
 		return
 	}
 	scope := &TypeScope{
-		Mod:     f.mod,
+		mod:     f.mod,
 		Path:    f.path,
 		Imports: f.hostFileImports,
 	}
@@ -147,7 +147,7 @@ func (f *Function) Parse(ctx context.Context) (err error) {
 	}
 	if len(params.List) == 2 {
 		// todo fn的参数和结果都先自己把expr拿出，然后在types去parse（expr+scope）
-		paramType, paramTypeErr := f.mod.types.parse(ctx, params.List[1].Type, scope)
+		paramType, paramTypeErr := f.mod.ParseExpr(ctx, params.List[1].Type, scope)
 		if paramTypeErr != nil {
 			err = errors.Warning("forg: parse function failed").WithCause(paramTypeErr).
 				WithMeta("service", f.hostServiceName).WithMeta("function", f.Ident)
@@ -191,7 +191,7 @@ func (f *Function) Parse(ctx context.Context) (err error) {
 				WithMeta("service", f.hostServiceName).WithMeta("function", f.Ident)
 			return
 		}
-		resultType, resultTypeErr := f.mod.types.parse(ctx, results.List[0].Type, scope)
+		resultType, resultTypeErr := f.mod.ParseExpr(ctx, results.List[0].Type, scope)
 		if resultTypeErr != nil {
 			err = errors.Warning("forg: parse function failed").WithCause(resultTypeErr).
 				WithMeta("service", f.hostServiceName).WithMeta("function", f.Ident)
