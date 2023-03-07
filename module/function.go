@@ -9,8 +9,9 @@ import (
 )
 
 type FunctionField struct {
-	Type *Type
-	Name string
+	Name      string
+	Paradigms []*TypeParadigm
+	Type      *Type
 }
 
 type Function struct {
@@ -100,24 +101,50 @@ func (f *Function) Transactional() (has bool) {
 func (f *Function) FieldImports() (v Imports) {
 	v = Imports{}
 	if f.Param != nil {
-		paths := f.Param.Type.GetTopPaths()
-		if paths != nil && len(paths) > 0 {
-			for _, path := range paths {
-				v.Add(&Import{
-					Path:  path,
-					Alias: "",
-				})
+		typePath := f.Param.Type.GetTopPath()
+		if typePath != "" {
+			v.Add(&Import{
+				Path:  typePath,
+				Alias: "",
+			})
+		}
+		if f.Param.Paradigms != nil && len(f.Param.Paradigms) > 0 {
+			for _, paradigm := range f.Param.Paradigms {
+				if paradigm.Types != nil && len(paradigm.Types) > 0 {
+					for _, tp := range paradigm.Types {
+						paradigmPath := tp.GetTopPath()
+						if paradigmPath != "" {
+							v.Add(&Import{
+								Path:  paradigmPath,
+								Alias: "",
+							})
+						}
+					}
+				}
 			}
 		}
 	}
 	if f.Result != nil {
-		paths := f.Result.Type.GetTopPaths()
-		if paths != nil && len(paths) > 0 {
-			for _, path := range paths {
-				v.Add(&Import{
-					Path:  path,
-					Alias: "",
-				})
+		typePath := f.Result.Type.GetTopPath()
+		if typePath != "" {
+			v.Add(&Import{
+				Path:  typePath,
+				Alias: "",
+			})
+		}
+		if f.Result.Paradigms != nil && len(f.Result.Paradigms) > 0 {
+			for _, paradigm := range f.Result.Paradigms {
+				if paradigm.Types != nil && len(paradigm.Types) > 0 {
+					for _, tp := range paradigm.Types {
+						paradigmPath := tp.GetTopPath()
+						if paradigmPath != "" {
+							v.Add(&Import{
+								Path:  paradigmPath,
+								Alias: "",
+							})
+						}
+					}
+				}
 			}
 		}
 	}
@@ -193,19 +220,20 @@ func (f *Function) parseField(ctx context.Context, field *ast.Field) (v *Functio
 		return
 	}
 	name := field.Names[0].Name
-	typ, parseTypeErr := f.parseFieldType(ctx, field.Type)
+	typ, paradigms, parseTypeErr := f.parseFieldType(ctx, field.Type)
 	if parseTypeErr != nil {
 		err = parseTypeErr
 		return
 	}
 	v = &FunctionField{
-		Type: typ,
-		Name: name,
+		Name:      name,
+		Paradigms: paradigms,
+		Type:      typ,
 	}
 	return
 }
 
-func (f *Function) parseFieldType(ctx context.Context, e ast.Expr) (typ *Type, err error) {
+func (f *Function) parseFieldType(ctx context.Context, e ast.Expr) (typ *Type, paradigms []*TypeParadigm, err error) {
 	switch e.(type) {
 	case *ast.Ident:
 		expr := e.(*ast.Ident)
@@ -219,6 +247,18 @@ func (f *Function) parseFieldType(ctx context.Context, e ast.Expr) (typ *Type, e
 		if !isTypeDecl {
 			err = errors.Warning("forg: field type only support value object or array")
 			return
+		}
+		if decl.TypeParams != nil && decl.TypeParams.NumFields() > 0 {
+			paradigms, err = f.mod.types.parseTypeParadigms(ctx, decl.TypeParams, &TypeScope{
+				Path:       f.path,
+				Mod:        f.mod,
+				Imports:    f.imports,
+				GenericDoc: "",
+			})
+			if err != nil {
+				err = errors.Warning("forg: parse paradigms field failed").WithCause(err)
+				return
+			}
 		}
 		switch decl.Type.(type) {
 		case *ast.StructType, *ast.ArrayType:
@@ -251,11 +291,7 @@ func (f *Function) parseFieldType(ctx context.Context, e ast.Expr) (typ *Type, e
 		}
 		break
 	case *ast.ArrayType:
-		elementType, parseElementErr := f.parseFieldType(ctx, e.(*ast.ArrayType).Elt)
-		if parseElementErr != nil {
-			err = parseElementErr
-			return
-		}
+
 		typ = &Type{
 			Kind:        ArrayKind,
 			Path:        "",
@@ -263,7 +299,7 @@ func (f *Function) parseFieldType(ctx context.Context, e ast.Expr) (typ *Type, e
 			Annotations: nil,
 			Paradigms:   nil,
 			Tags:        nil,
-			Elements:    []*Type{elementType},
+			Elements:    []*Type{},
 		}
 		break
 	default:
