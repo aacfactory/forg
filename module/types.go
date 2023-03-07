@@ -3,10 +3,8 @@ package module
 import (
 	"context"
 	"fmt"
-	"github.com/aacfactory/errors"
 	"go/ast"
 	"golang.org/x/sync/singleflight"
-	"reflect"
 	"sync"
 )
 
@@ -25,48 +23,7 @@ type TypeParadigm struct {
 	Types []Type
 }
 
-func newType(expr ast.Expr, scope *TypeScope) (typ *Type, err error) {
-	var kind TypeKind
-	path := ""
-	name := ""
-	switch expr.(type) {
-	case *ast.Ident:
-
-		break
-	case *ast.SelectorExpr:
-
-		break
-	case *ast.StarExpr:
-
-		break
-	case *ast.StructType:
-
-		break
-	case *ast.ArrayType:
-
-		break
-	case *ast.MapType:
-
-		break
-	default:
-		err = errors.Warning("forg: new type from ast expr failed").WithCause(errors.Warning(fmt.Sprintf("%s was not supported", reflect.TypeOf(expr))))
-		return
-	}
-	typ = &Type{
-		expr:        expr,
-		Kind:        kind,
-		Path:        path,
-		Name:        name,
-		Annotations: Annotations{},
-		Paradigms:   make([]*TypeParadigm, 0, 1),
-		Tags:        make(map[string]string),
-		Elements:    make([]*Type, 0, 1),
-	}
-	return
-}
-
 type Type struct {
-	expr        ast.Expr
 	Kind        TypeKind
 	Path        string
 	Name        string
@@ -99,49 +56,30 @@ func (typ *Type) Key() (key string) {
 	return
 }
 
-func (typ *Type) GetPath() (path string) {
-	if typ.Path != "" {
-		path = typ.Path
-		return
-	}
-	if typ.Kind == BuiltinKind {
-		return
-	}
+func (typ *Type) GetTopPaths() (paths []string) {
 	switch typ.Kind {
-	case PointerKind, ArrayKind:
-		path = typ.Elements[0].GetPath()
-		break
-	case MapKind:
-		path = typ.Elements[1].GetPath()
-		break
-	}
-	return
-}
-
-func (typ *Type) GetParadigmPaths() (paths []string) {
-	paths = make([]string, 0, 1)
-	if typ.Paradigms != nil && len(typ.Paradigms) > 0 {
-		for _, paradigm := range typ.Paradigms {
-			if paradigm.Types != nil && len(paradigm.Types) > 0 {
-				for _, t := range paradigm.Types {
-					path := t.GetPath()
-					if path != "" {
-						paths = append(paths, path)
+	case StructKind:
+		paths = make([]string, 0, 1)
+		if typ.Path != "" {
+			paths = append(paths, typ.Path)
+		}
+		if typ.Paradigms != nil && len(typ.Paradigms) > 0 {
+			for _, paradigm := range typ.Paradigms {
+				if paradigm.Types != nil && len(paradigm.Types) > 0 {
+					for _, pt := range paradigm.Types {
+						paradigmPaths := pt.GetTopPaths()
+						if paradigmPaths != nil {
+							paths = append(paths, paradigmPaths...)
+						}
 					}
 				}
 			}
 		}
-		return
-	}
-	if typ.Kind == BuiltinKind {
-		return
-	}
-	switch typ.Kind {
 	case PointerKind, ArrayKind:
-		paths = typ.Elements[0].GetParadigmPaths()
+		paths = typ.Elements[0].GetTopPaths()
 		break
 	case MapKind:
-		paths = typ.Elements[1].GetParadigmPaths()
+		paths = typ.Elements[1].GetTopPaths()
 		break
 	}
 	return
@@ -153,9 +91,10 @@ func NewTypeScope(path string, imports Imports) (scope *TypeScope) {
 }
 
 type TypeScope struct {
-	mod     *Module
-	Path    string
-	Imports Imports
+	Path       string
+	Mod        *Module
+	Imports    Imports
+	GenericDoc string
 }
 
 type Types struct {
@@ -163,70 +102,8 @@ type Types struct {
 	group  singleflight.Group
 }
 
-func (types *Types) parse(ctx context.Context, expr ast.Expr, scope *TypeScope) (typ *Type, err error) {
-	switch expr.(type) {
-	case *ast.Ident:
-		e := expr.(*ast.Ident)
-		if e.Obj == nil {
-			// builtin
-			return
-		}
+func (types *Types) parseType(ctx context.Context, spec *ast.TypeSpec, scope *TypeScope) (typ *Type, err error) {
 
-		break
-	case *ast.SelectorExpr:
-
-		break
-	case *ast.StarExpr:
-
-		break
-	case *ast.ArrayType:
-
-		break
-	case *ast.MapType:
-
-		break
-	default:
-		err = errors.Warning("forg: unsupported expr").WithMeta("expr", reflect.TypeOf(expr).String())
-		return
-	}
-
-	bt, btOk := types.tryParseBuiltinType(expr, scope)
-	if btOk {
-		typ = bt
-		return
-	}
-	// scan basic
-	typ, err = newType(expr, scope)
-	if err != nil {
-		err = errors.Warning("forg: parse type failed").WithCause(err)
-		return
-	}
-	key := typ.Key()
-	cached := ctx.Value(key)
-	if cached != nil {
-		typ = cached.(*Type)
-		return
-	}
-	stored, has := types.values.Load(key)
-	if has {
-		typ = stored.(*Type)
-		return
-	}
-	v, doErr, _ := types.group.Do(key, func() (v interface{}, err error) {
-		ctx = context.WithValue(ctx, key, typ)
-		err = types.scanType(ctx, typ, scope)
-		if err != nil {
-			return
-		}
-		types.values.Store(key, key)
-		v = typ
-		return
-	})
-	if doErr != nil {
-		err = errors.Warning("forg: parse type failed").WithMeta("key", key).WithCause(doErr)
-		return
-	}
-	typ = v.(*Type)
 	return
 }
 
@@ -409,31 +286,7 @@ func (types *Types) tryParseBuiltinType(expr ast.Expr, scope *TypeScope) (typ *T
 	return
 }
 
-func (types *Types) scanType(ctx context.Context, typ *Type, scope *TypeScope) (err error) {
-	switch typ.expr.(type) {
-	case *ast.Ident:
-
-		break
-	case *ast.SelectorExpr:
-
-		break
-	case *ast.StarExpr:
-
-		break
-	case *ast.ArrayType:
-
-		break
-	case *ast.MapType:
-
-		break
-	default:
-		err = errors.Warning("forg: unsupported expr").WithMeta("expr", reflect.TypeOf(typ.expr).String()).WithMeta("path", typ.Path).WithMeta("name", typ.Name)
-		return
-	}
-	return
-}
-
-func isContextType(expr ast.Expr, scope *TypeScope) (ok bool) {
+func isContextType(expr ast.Expr, imports Imports) (ok bool) {
 	e, isSelector := expr.(*ast.SelectorExpr)
 	if !isSelector {
 		return
@@ -456,7 +309,7 @@ func isContextType(expr ast.Expr, scope *TypeScope) (ok bool) {
 	if !ok {
 		return
 	}
-	importer, has := scope.Imports.Find(pkg)
+	importer, has := imports.Find(pkg)
 	if !has {
 		return
 	}
@@ -464,7 +317,7 @@ func isContextType(expr ast.Expr, scope *TypeScope) (ok bool) {
 	return
 }
 
-func isCodeErrorType(expr ast.Expr, scope *TypeScope) (ok bool) {
+func isCodeErrorType(expr ast.Expr, imports Imports) (ok bool) {
 	e, isSelector := expr.(*ast.SelectorExpr)
 	if !isSelector {
 		return
@@ -487,7 +340,7 @@ func isCodeErrorType(expr ast.Expr, scope *TypeScope) (ok bool) {
 	if !ok {
 		return
 	}
-	importer, has := scope.Imports.Find(pkg)
+	importer, has := imports.Find(pkg)
 	if !has {
 		return
 	}

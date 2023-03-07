@@ -160,9 +160,11 @@ func (service *Service) loadFunctions() (err error) {
 			}
 			service.Functions = append(service.Functions, &Function{
 				mod:             service.mod,
-				hostFileImports: fileImports,
 				hostServiceName: service.Name,
 				path:            service.Path,
+				filename:        filename,
+				file:            file,
+				imports:         fileImports,
 				decl:            funcDecl,
 				Ident:           funcDecl.Name.Name,
 				ConstIdent:      constIdent,

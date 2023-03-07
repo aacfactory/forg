@@ -130,6 +130,55 @@ func (sources *Sources) FindFileInDir(path string, matcher func(file *ast.File) 
 	return
 }
 
+func (sources *Sources) FindTypeSpec(path string, name string) (spec *ast.TypeSpec, imports Imports, genericDoc string, err error) {
+	reader, readerErr := sources.getReader(path)
+	if readerErr != nil {
+		err = errors.Warning("forg: find type spec in source dir failed").
+			WithCause(readerErr).
+			WithMeta("path", path).WithMeta("name", name).WithMeta("mod", sources.path)
+		return
+	}
+	for _, sf := range reader.files {
+		file, fileErr := sf.File()
+		if fileErr != nil {
+			err = errors.Warning("forg: find type spec in source dir failed").
+				WithCause(fileErr).
+				WithMeta("path", path).WithMeta("name", name).WithMeta("mod", sources.path)
+			return
+		}
+		if file.Decls == nil || len(file.Decls) == 0 {
+			return
+		}
+		for _, declaration := range file.Decls {
+			genDecl, isGenDecl := declaration.(*ast.GenDecl)
+			if !isGenDecl {
+				continue
+			}
+			if genDecl.Specs == nil || len(genDecl.Specs) == 0 {
+				continue
+			}
+			for _, s := range genDecl.Specs {
+				ts, isType := s.(*ast.TypeSpec)
+				if !isType {
+					continue
+				}
+				if ts.Name.Name == name {
+					spec = ts
+					imports = newImportsFromAstFileImports(file.Imports)
+					if genDecl.Doc != nil {
+						genericDoc = genDecl.Doc.Text()
+					}
+					return
+				}
+			}
+		}
+	}
+	err = errors.Warning("forg: find type spec in source dir failed").
+		WithCause(errors.Warning("forg: not found")).
+		WithMeta("path", path).WithMeta("name", name).WithMeta("mod", sources.path)
+	return
+}
+
 type SourceDirReader struct {
 	locker sync.Locker
 	files  []*SourceFile

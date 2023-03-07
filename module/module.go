@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"github.com/aacfactory/errors"
 	"github.com/aacfactory/forg/files"
-	"go/ast"
 	"golang.org/x/mod/modfile"
 	"golang.org/x/sync/singleflight"
 	"os"
@@ -353,31 +352,36 @@ func (mod *Module) findModuleByPath(ctx context.Context, path string) (v *Module
 	return
 }
 
-func (mod *Module) findFile(ctx context.Context, path string, match func(file *ast.File) (ok bool)) (file *ast.File, module *Module, err error) {
-	has := false
-	module, has, err = mod.findModuleByPath(ctx, path)
-	if err != nil {
-		err = errors.Warning("forg: find file failed").
-			WithCause(err).WithMeta("path", path)
+func (mod *Module) ParseType(ctx context.Context, path string, name string) (typ *Type, err error) {
+	// module
+	typeModule, hasTypeModule, findTypeModuleErr := mod.findModuleByPath(ctx, path)
+	if findTypeModuleErr != nil {
+		err = errors.Warning("forg: mod parse type failed").
+			WithMeta("path", path).WithMeta("name", name).
+			WithCause(findTypeModuleErr)
 		return
 	}
-	if !has {
-		err = errors.Warning("forg: find file failed").
-			WithCause(errors.Warning("forg: file was not found")).WithMeta("path", path)
+	if !hasTypeModule {
+		err = errors.Warning("forg: mod parse type failed").
+			WithMeta("path", path).WithMeta("name", name).
+			WithCause(errors.Warning("forg: module of type was not found"))
 		return
 	}
-	file, err = module.sources.FindFileInDir(path, match)
-	if err != nil {
-		err = errors.Warning("forg: find file failed").
-			WithCause(err).WithMeta("path", path)
+	// spec
+	spec, specImports, genDoc, findSpecErr := typeModule.sources.FindTypeSpec(path, name)
+	if findSpecErr != nil {
+		err = errors.Warning("forg: mod parse type failed").
+			WithMeta("path", path).WithMeta("name", name).
+			WithCause(findSpecErr)
 		return
 	}
-	return
-}
 
-func (mod *Module) ParseExpr(ctx context.Context, expr ast.Expr, scope *TypeScope) (typ *Type, err error) {
-	scope.mod = mod
-	typ, err = mod.types.parse(ctx, expr, scope)
+	typ, err = typeModule.types.parseType(ctx, spec, &TypeScope{
+		Path:       path,
+		Mod:        typeModule,
+		Imports:    specImports,
+		GenericDoc: genDoc,
+	})
 	return
 }
 
