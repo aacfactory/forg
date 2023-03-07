@@ -3,13 +3,16 @@ package module
 import (
 	"context"
 	"fmt"
+	"github.com/aacfactory/errors"
 	"go/ast"
 	"golang.org/x/sync/singleflight"
+	"reflect"
 	"sync"
 )
 
 const (
-	BuiltinKind = TypeKind(iota + 1)
+	BasicKind   = TypeKind(iota + 1) // 基本类型，oas时不需要ref
+	BuiltinKind                      // 内置类型，oas时需要ref，但不需要建component
 	StructKind
 	PointerKind
 	ArrayKind
@@ -35,58 +38,20 @@ type Type struct {
 
 func (typ *Type) Key() (key string) {
 	key = fmt.Sprintf("%s:%s", typ.Path, typ.Name)
-	if typ.Paradigms != nil && len(typ.Paradigms) > 0 {
-		p := ""
-		for _, paradigm := range typ.Paradigms {
-			p = p + "," + paradigm.Name
-			if paradigm.Types != nil && len(paradigm.Types) > 0 {
-				pts := ""
-				for _, pt := range paradigm.Types {
-					pts = pts + "|" + pt.Key()
-				}
-				if pts != "" {
-					p = p + pts[1:]
-				}
-			}
-		}
-		if p != "" {
-			key = key + "[" + p[1:] + "]"
-		}
-	}
 	return
 }
 
-func (typ *Type) GetTopPaths() (paths []string) {
+func (typ *Type) GetTopPath() (path string) {
 	switch typ.Kind {
 	case StructKind:
-		paths = make([]string, 0, 1)
-		if typ.Path != "" {
-			paths = append(paths, typ.Path)
-		}
-		if typ.Paradigms != nil && len(typ.Paradigms) > 0 {
-			for _, paradigm := range typ.Paradigms {
-				if paradigm.Types != nil && len(paradigm.Types) > 0 {
-					for _, pt := range paradigm.Types {
-						paradigmPaths := pt.GetTopPaths()
-						if paradigmPaths != nil {
-							paths = append(paths, paradigmPaths...)
-						}
-					}
-				}
-			}
-		}
+		path = typ.Path
 	case PointerKind, ArrayKind:
-		paths = typ.Elements[0].GetTopPaths()
+		path = typ.Elements[0].GetTopPath()
 		break
 	case MapKind:
-		paths = typ.Elements[1].GetTopPaths()
+		path = typ.Elements[1].GetTopPath()
 		break
 	}
-	return
-}
-
-func NewTypeScope(path string, imports Imports) (scope *TypeScope) {
-
 	return
 }
 
@@ -107,13 +72,57 @@ func (types *Types) parseType(ctx context.Context, spec *ast.TypeSpec, scope *Ty
 	return
 }
 
-func (types *Types) parseStructType(ctx context.Context, name string, st *ast.StructType, scope *TypeScope) (typ *Type, err error) {
+func (types *Types) parseTypeParadigms(ctx context.Context, params *ast.FieldList, scope *TypeScope) (paradigms []*TypeParadigm, err error) {
 
 	return
 }
 
-func (types *Types) tryParseBuiltinType(expr ast.Expr, scope *TypeScope) (typ *Type, ok bool) {
+func (types *Types) parseStructType(ctx context.Context, spec *ast.TypeSpec, scope *TypeScope) (typ *Type, err error) {
+	path := scope.Path
+	name := spec.Name.Name
+	st, typeOk := spec.Type.(*ast.StructType)
+	if !typeOk {
+		err = errors.Warning("forg: parse struct type failed").
+			WithMeta("path", path).WithMeta("name", name).
+			WithCause(errors.Warning("type of spec is not ast.StructType").WithMeta("type", reflect.TypeOf(spec.Type).String()))
+		return
+	}
+	typ = &Type{
+		Kind:        StructKind,
+		Path:        path,
+		Name:        name,
+		Annotations: nil,
+		Paradigms:   nil,
+		Tags:        nil,
+		Elements:    make([]*Type, 0, 1),
+	}
+	key := typ.Key()
+	cached := ctx.Value(key)
+	if cached != nil {
+		typ = cached.(*Type)
+		return
+	}
+	stored, loaded := types.values.Load(key)
+	if loaded {
+		typ = stored.(*Type)
+		return
+	}
+	result, doErr, _ := types.group.Do(key, func() (v interface{}, err error) {
+		// annotations
 
+		// fields
+
+		return
+	})
+	if doErr != nil {
+		err = doErr
+		return
+	}
+	typ = result.(*Type)
+	return
+}
+
+func (types *Types) tryParseBuiltinType(expr ast.Expr, scope *TypeScope) (typ *Type, ok bool) {
 	switch expr.(type) {
 	case *ast.Ident:
 		e := expr.(*ast.Ident)
@@ -130,7 +139,7 @@ func (types *Types) tryParseBuiltinType(expr ast.Expr, scope *TypeScope) (typ *T
 			break
 		}
 		typ = &Type{
-			Kind:        BuiltinKind,
+			Kind:        BasicKind,
 			Path:        "",
 			Name:        e.Name,
 			Annotations: Annotations{},
@@ -166,7 +175,7 @@ func (types *Types) tryParseBuiltinType(expr ast.Expr, scope *TypeScope) (typ *T
 			switch structName {
 			case "Time", "Duration":
 				typ = &Type{
-					Kind:        BuiltinKind,
+					Kind:        BasicKind,
 					Path:        path,
 					Name:        structName,
 					Annotations: Annotations{},
@@ -182,7 +191,7 @@ func (types *Types) tryParseBuiltinType(expr ast.Expr, scope *TypeScope) (typ *T
 			switch structName {
 			case "RawMessage":
 				typ = &Type{
-					Kind:        BuiltinKind,
+					Kind:        BasicKind,
 					Path:        path,
 					Name:        structName,
 					Annotations: Annotations{},
@@ -196,7 +205,17 @@ func (types *Types) tryParseBuiltinType(expr ast.Expr, scope *TypeScope) (typ *T
 			break
 		case "github.com/aacfactory/json":
 			switch structName {
-			case "RawMessage", "Object", "Array", "Date", "Time":
+			case "RawMessage", "Date", "Time":
+				typ = &Type{
+					Kind:        BasicKind,
+					Path:        path,
+					Name:        structName,
+					Annotations: Annotations{},
+					Paradigms:   make([]*TypeParadigm, 0, 1),
+					Elements:    make([]*Type, 0, 1),
+				}
+				break
+			case "Object", "Array":
 				typ = &Type{
 					Kind:        BuiltinKind,
 					Path:        path,
@@ -246,7 +265,7 @@ func (types *Types) tryParseBuiltinType(expr ast.Expr, scope *TypeScope) (typ *T
 			switch structName {
 			case "Date", "Time":
 				typ = &Type{
-					Kind:        BuiltinKind,
+					Kind:        BasicKind,
 					Path:        path,
 					Name:        structName,
 					Annotations: Annotations{},
@@ -260,7 +279,7 @@ func (types *Types) tryParseBuiltinType(expr ast.Expr, scope *TypeScope) (typ *T
 			break
 		case "github.com/aacfactory/fns-contrib/databases/sql/dal":
 			switch structName {
-			case "PageResult":
+			case "Pager":
 				typ = &Type{
 					Kind:        BuiltinKind,
 					Path:        path,
