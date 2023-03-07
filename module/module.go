@@ -254,10 +254,16 @@ func (mod *Module) parse(ctx context.Context, host *Module) (err error) {
 	if mod.Requires.Len() > 0 {
 		sort.Sort(sort.Reverse(mod.Requires))
 	}
-	mod.types = &Types{
-		values: sync.Map{},
-		group:  singleflight.Group{},
+
+	if host != nil {
+		mod.types = host.types
+	} else {
+		mod.types = &Types{
+			values: sync.Map{},
+			group:  singleflight.Group{},
+		}
 	}
+
 	mod.sources = newSource(mod.Path, mod.Dir)
 	mod.parsed = true
 	return
