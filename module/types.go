@@ -14,6 +14,7 @@ const (
 	BasicKind   = TypeKind(iota + 1) // 基本类型，oas时不需要ref
 	BuiltinKind                      // 内置类型，oas时需要ref，但不需要建component
 	StructKind
+	StructFieldKind
 	PointerKind
 	ArrayKind
 	MapKind
@@ -77,6 +78,14 @@ func (types *Types) parseTypeParadigms(ctx context.Context, params *ast.FieldLis
 	return
 }
 
+func (types *Types) parseExpr(ctx context.Context, expr ast.Expr, scope *TypeScope) (typ *Type, err error) {
+	// builtin
+
+	// use mod.ParseType
+
+	return
+}
+
 func (types *Types) parseStructType(ctx context.Context, spec *ast.TypeSpec, scope *TypeScope) (typ *Type, err error) {
 	path := scope.Path
 	name := spec.Name.Name
@@ -108,10 +117,117 @@ func (types *Types) parseStructType(ctx context.Context, spec *ast.TypeSpec, sco
 		return
 	}
 	result, doErr, _ := types.group.Do(key, func() (v interface{}, err error) {
+		ctx = context.WithValue(ctx, key, typ)
 		// annotations
-
+		doc := ""
+		if spec.Doc != nil && spec.Doc.Text() != "" {
+			doc = spec.Doc.Text()
+		} else {
+			doc = scope.GenericDoc
+		}
+		annotations, parseAnnotationsErr := ParseAnnotations(doc)
+		if parseAnnotationsErr != nil {
+			err = errors.Warning("forg: parse struct type failed").
+				WithMeta("path", path).WithMeta("name", name).
+				WithCause(parseAnnotationsErr)
+			return
+		}
+		typ.Annotations = annotations
+		// paradigms
+		if spec.TypeParams != nil && spec.TypeParams.NumFields() > 0 {
+			paradigms, parseParadigmsErr := types.parseTypeParadigms(ctx, spec.TypeParams, scope)
+			if parseParadigmsErr != nil {
+				err = errors.Warning("forg: parse struct type failed").
+					WithMeta("path", path).WithMeta("name", name).
+					WithCause(parseParadigmsErr)
+				return
+			}
+			typ.Paradigms = paradigms
+		}
 		// fields
-
+		if st.Fields != nil && st.Fields.NumFields() > 0 {
+			typ.Elements = make([]*Type, 0, 1)
+			for i, field := range st.Fields.List {
+				if field.Names != nil && len(field.Names) > 1 {
+					err = errors.Warning("forg: parse struct type failed").
+						WithMeta("path", path).WithMeta("name", name).
+						WithCause(errors.Warning("forg: too many names of one field")).WithMeta("field_no", fmt.Sprintf("%d", i))
+					return
+				}
+				if field.Names == nil || len(field.Names) == 0 {
+					// compose
+					if field.Type != nil {
+						fieldType, parseFieldTypeErr := types.parseExpr(ctx, field.Type, scope)
+						if parseFieldTypeErr != nil {
+							err = errors.Warning("forg: parse struct type failed").
+								WithMeta("path", path).WithMeta("name", name).
+								WithCause(parseFieldTypeErr).WithMeta("field_no", fmt.Sprintf("%d", i))
+							return
+						}
+						typ.Elements = append(typ.Elements, &Type{
+							Kind:        StructFieldKind,
+							Path:        "",
+							Name:        "",
+							Annotations: nil,
+							Paradigms:   nil,
+							Tags:        nil,
+							Elements:    []*Type{fieldType},
+						})
+					} else {
+						err = errors.Warning("forg: parse struct type failed").
+							WithMeta("path", path).WithMeta("name", name).
+							WithCause(errors.Warning("forg: unsupported field")).WithMeta("field_no", fmt.Sprintf("%d", i))
+						return
+					}
+				}
+				ft := &Type{
+					Kind:        StructFieldKind,
+					Path:        "",
+					Name:        "",
+					Annotations: nil,
+					Paradigms:   nil,
+					Tags:        nil,
+					Elements:    nil,
+				}
+				// name
+				ft.Name = field.Names[0].Name
+				// tag
+				if field.Tag != nil && field.Tag.Value != "" {
+					ft.Tags = parseFieldTag(field.Tag.Value)
+				}
+				// annotations
+				if field.Doc != nil && field.Doc.Text() != "" {
+					fieldAnnotations, parseFieldAnnotationsErr := ParseAnnotations(field.Doc.Text())
+					if parseFieldAnnotationsErr != nil {
+						err = errors.Warning("forg: parse struct type failed").
+							WithMeta("path", path).WithMeta("name", name).
+							WithCause(parseFieldAnnotationsErr).
+							WithMeta("field_no", fmt.Sprintf("%d", i)).
+							WithMeta("field", ft.Name)
+						return
+					}
+					ft.Annotations = fieldAnnotations
+				}
+				// paradigms
+				paradigms, hasParadigms := types.tryParseStructFieldParadigms(typ, field.Type)
+				if hasParadigms {
+					ft.Paradigms = paradigms
+				}
+				element, parseElementErr := types.parseExpr(ctx, field.Type, scope)
+				if parseElementErr != nil {
+					if parseElementErr != nil {
+						err = errors.Warning("forg: parse struct type failed").
+							WithMeta("path", path).WithMeta("name", name).
+							WithCause(parseElementErr).
+							WithMeta("field_no", fmt.Sprintf("%d", i)).
+							WithMeta("field", ft.Name)
+						return
+					}
+				}
+				ft.Elements = []*Type{element}
+				typ.Elements = append(typ.Elements, ft)
+			}
+		}
 		return
 	})
 	if doErr != nil {
@@ -302,6 +418,43 @@ func (types *Types) tryParseBuiltinType(expr ast.Expr, scope *TypeScope) (typ *T
 		break
 	}
 	ok = typ != nil
+	return
+}
+
+func (types *Types) tryParseStructFieldParadigms(st *Type, expr ast.Expr) (paradigms []*TypeParadigm, has bool) {
+	paradigms = make([]*TypeParadigm, 0, 1)
+	switch expr.(type) {
+	case *ast.Ident:
+		// todo has name and no name
+		ident := expr.(*ast.Ident).Name
+		for _, paradigm := range st.Paradigms {
+			if paradigm.Name == ident {
+				paradigms = append(paradigms, paradigm)
+				break
+			}
+		}
+	case *ast.ArrayType:
+		arrayType := expr.(*ast.ArrayType)
+		subs, hasSubs := types.tryParseStructFieldParadigms(st, arrayType.Elt)
+		if hasSubs {
+			paradigms = append(paradigms, subs...)
+		}
+		break
+	case *ast.MapType:
+		mapType := expr.(*ast.MapType)
+		keys, hasKeys := types.tryParseStructFieldParadigms(st, mapType.Key)
+		if hasKeys {
+			paradigms = append(paradigms, keys...)
+		}
+		values, hasValues := types.tryParseStructFieldParadigms(st, mapType.Value)
+		if hasValues {
+			paradigms = append(paradigms, values...)
+		}
+		break
+	default:
+		break
+	}
+	has = len(paradigms) > 0
 	return
 }
 
