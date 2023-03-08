@@ -18,13 +18,25 @@ const (
 	PointerKind
 	ArrayKind
 	MapKind
+	AnyKind
+	ParadigmKind
 )
 
 type TypeKind int
 
 type TypeParadigm struct {
 	Name  string
-	Types []Type
+	Types []*Type
+}
+
+var AnyType = &Type{
+	Kind:        AnyKind,
+	Path:        "",
+	Name:        "",
+	Annotations: nil,
+	Paradigms:   nil,
+	Tags:        nil,
+	Elements:    nil,
 }
 
 type Type struct {
@@ -42,15 +54,17 @@ func (typ *Type) Key() (key string) {
 	return
 }
 
-func (typ *Type) GetTopPath() (path string) {
+func (typ *Type) GetTopPaths() (paths []string) {
+	paths = make([]string, 0, 1)
 	switch typ.Kind {
 	case StructKind:
-		path = typ.Path
+		paths = append(paths, typ.Path)
 	case PointerKind, ArrayKind:
-		path = typ.Elements[0].GetTopPath()
+		paths = append(paths, typ.Elements[0].GetTopPaths()...)
 		break
 	case MapKind:
-		path = typ.Elements[1].GetTopPath()
+		paths = append(paths, typ.Elements[0].GetTopPaths()...)
+		paths = append(paths, typ.Elements[1].GetTopPaths()...)
 		break
 	}
 	return
@@ -69,7 +83,21 @@ type Types struct {
 }
 
 func (types *Types) parseType(ctx context.Context, spec *ast.TypeSpec, scope *TypeScope) (typ *Type, err error) {
+	//
+	switch spec.Type.(type) {
+	case *ast.Ident:
 
+		break
+	case *ast.StructType:
+		typ, err = types.parseStructType(ctx, spec, scope)
+		break
+	case *ast.ArrayType:
+
+	case *ast.MapType:
+
+	default:
+
+	}
 	return
 }
 
@@ -78,10 +106,7 @@ func (types *Types) parseTypeParadigms(ctx context.Context, params *ast.FieldLis
 	return
 }
 
-func (types *Types) parseExpr(ctx context.Context, expr ast.Expr, scope *TypeScope) (typ *Type, err error) {
-	// builtin
-
-	// use mod.ParseType
+func (types *Types) parseParadigmType(ctx context.Context, param ast.Expr, scope *TypeScope) (paradigm *TypeParadigm, err error) {
 
 	return
 }
@@ -145,6 +170,8 @@ func (types *Types) parseStructType(ctx context.Context, spec *ast.TypeSpec, sco
 			typ.Paradigms = paradigms
 		}
 		// fields
+		// get name, annotations, tag from field
+		// get element and paradigms from field.Type (*ast.IndexExpr or *ast.IndexListExpr contains paradigms)
 		if st.Fields != nil && st.Fields.NumFields() > 0 {
 			typ.Elements = make([]*Type, 0, 1)
 			for i, field := range st.Fields.List {
@@ -157,11 +184,11 @@ func (types *Types) parseStructType(ctx context.Context, spec *ast.TypeSpec, sco
 				if field.Names == nil || len(field.Names) == 0 {
 					// compose
 					if field.Type != nil {
-						fieldType, parseFieldTypeErr := types.parseExpr(ctx, field.Type, scope)
-						if parseFieldTypeErr != nil {
+						element, parseStructFieldTypeErr := types.parseStructFieldType(ctx, typ, field.Type, scope)
+						if parseStructFieldTypeErr != nil {
 							err = errors.Warning("forg: parse struct type failed").
 								WithMeta("path", path).WithMeta("name", name).
-								WithCause(parseFieldTypeErr).WithMeta("field_no", fmt.Sprintf("%d", i))
+								WithCause(parseStructFieldTypeErr).WithMeta("field_no", fmt.Sprintf("%d", i))
 							return
 						}
 						typ.Elements = append(typ.Elements, &Type{
@@ -171,7 +198,7 @@ func (types *Types) parseStructType(ctx context.Context, spec *ast.TypeSpec, sco
 							Annotations: nil,
 							Paradigms:   nil,
 							Tags:        nil,
-							Elements:    []*Type{fieldType},
+							Elements:    []*Type{element},
 						})
 					} else {
 						err = errors.Warning("forg: parse struct type failed").
@@ -179,6 +206,7 @@ func (types *Types) parseStructType(ctx context.Context, spec *ast.TypeSpec, sco
 							WithCause(errors.Warning("forg: unsupported field")).WithMeta("field_no", fmt.Sprintf("%d", i))
 						return
 					}
+					return
 				}
 				ft := &Type{
 					Kind:        StructFieldKind,
@@ -208,21 +236,15 @@ func (types *Types) parseStructType(ctx context.Context, spec *ast.TypeSpec, sco
 					}
 					ft.Annotations = fieldAnnotations
 				}
-				// paradigms
-				paradigms, hasParadigms := types.tryParseStructFieldParadigms(typ, field.Type)
-				if hasParadigms {
-					ft.Paradigms = paradigms
-				}
-				element, parseElementErr := types.parseExpr(ctx, field.Type, scope)
-				if parseElementErr != nil {
-					if parseElementErr != nil {
-						err = errors.Warning("forg: parse struct type failed").
-							WithMeta("path", path).WithMeta("name", name).
-							WithCause(parseElementErr).
-							WithMeta("field_no", fmt.Sprintf("%d", i)).
-							WithMeta("field", ft.Name)
-						return
-					}
+				// paradigms and element
+				element, parseStructFieldTypeErr := types.parseStructFieldType(ctx, typ, field.Type, scope)
+				if parseStructFieldTypeErr != nil {
+					err = errors.Warning("forg: parse struct type failed").
+						WithMeta("path", path).WithMeta("name", name).
+						WithCause(parseStructFieldTypeErr).
+						WithMeta("field_no", fmt.Sprintf("%d", i)).
+						WithMeta("field", ft.Name)
+					return
 				}
 				ft.Elements = []*Type{element}
 				typ.Elements = append(typ.Elements, ft)
@@ -238,223 +260,191 @@ func (types *Types) parseStructType(ctx context.Context, spec *ast.TypeSpec, sco
 	return
 }
 
-func (types *Types) tryParseBuiltinType(expr ast.Expr, scope *TypeScope) (typ *Type, ok bool) {
-	switch expr.(type) {
+func (types *Types) parseStructFieldType(ctx context.Context, st *Type, field ast.Expr, scope *TypeScope) (element *Type, err error) {
+	if ctx.Err() != nil {
+		err = ctx.Err()
+		return
+	}
+	switch field.(type) {
 	case *ast.Ident:
-		e := expr.(*ast.Ident)
-		if e.Obj != nil {
-			return
-		}
-		isBuiltin := e.Name == "string" ||
-			e.Name == "bool" ||
-			e.Name == "int" || e.Name == "int8" || e.Name == "int16" || e.Name == "int32" || e.Name == "int64" ||
-			e.Name == "uint" || e.Name == "uint8" || e.Name == "uint16" || e.Name == "uint32" || e.Name == "uint64" ||
-			e.Name == "float32" || e.Name == "float64" ||
-			e.Name == "complex64" || e.Name == "complex128"
-		if !isBuiltin {
+		expr := field.(*ast.Ident)
+		isBuiltin := expr.Name == "string" ||
+			expr.Name == "bool" ||
+			expr.Name == "int" || expr.Name == "int8" || expr.Name == "int16" || expr.Name == "int32" || expr.Name == "int64" ||
+			expr.Name == "uint" || expr.Name == "uint8" || expr.Name == "uint16" || expr.Name == "uint32" || expr.Name == "uint64" ||
+			expr.Name == "float32" || expr.Name == "float64" ||
+			expr.Name == "complex64" || expr.Name == "complex128"
+		if isBuiltin {
+			element = &Type{
+				Kind:        BasicKind,
+				Path:        "",
+				Name:        expr.Name,
+				Annotations: Annotations{},
+				Paradigms:   make([]*TypeParadigm, 0, 1),
+				Elements:    make([]*Type, 0, 1),
+			}
 			break
 		}
-		typ = &Type{
-			Kind:        BasicKind,
-			Path:        "",
-			Name:        e.Name,
-			Annotations: Annotations{},
-			Paradigms:   make([]*TypeParadigm, 0, 1),
-			Elements:    make([]*Type, 0, 1),
+		// paradigms
+		if st.Paradigms != nil && len(st.Paradigms) > 0 {
+			for _, paradigm := range st.Paradigms {
+				if paradigm.Name == expr.Name {
+					element = &Type{
+						Kind:        ParadigmKind,
+						Path:        "",
+						Name:        expr.Name,
+						Annotations: nil,
+						Paradigms:   nil,
+						Tags:        nil,
+						Elements:    paradigm.Types,
+					}
+					break
+				}
+			}
 		}
+		if expr.Obj == nil {
+			// not in same file
+			element, err = scope.Mod.ParseType(ctx, scope.Path, expr.Name)
+			break
+		}
+		// in same file
+		if expr.Obj.Kind != ast.Typ || expr.Obj.Decl == nil {
+			err = errors.Warning("forg: kind of field object must be type")
+			break
+		}
+		spec, isTypeSpec := expr.Obj.Decl.(*ast.TypeSpec)
+		if !isTypeSpec {
+			err = errors.Warning("forg: kind of field object must be type").WithMeta("decl", reflect.TypeOf(expr.Obj.Decl).String())
+			break
+		}
+		element, err = types.parseType(ctx, spec, scope)
 		break
 	case *ast.SelectorExpr:
-		e := expr.(*ast.SelectorExpr)
-		pkg := ""
-		if e.X != nil {
-			pkgExpr, isIdent := e.X.(*ast.Ident)
-			if isIdent {
-				pkg = pkgExpr.Name
-			}
-		}
-		path := ""
-		if pkg != "" && scope != nil {
-			importer, has := scope.Imports.Find(pkg)
-			if has {
-				path = importer.Path
-			}
-		}
-		structName := ""
-		if e.Sel != nil {
-			structName = e.Sel.Name
-		}
-		if path == "" || structName == "" {
+		expr := field.(*ast.SelectorExpr)
+		ident, isIdent := expr.X.(*ast.Ident)
+		if !isIdent {
+			err = errors.Warning("forg: x type of selector field must be ident").WithMeta("selector_x", reflect.TypeOf(expr.X).String())
 			break
 		}
-		switch path {
-		case "time":
-			switch structName {
-			case "Time", "Duration":
-				typ = &Type{
-					Kind:        BasicKind,
-					Path:        path,
-					Name:        structName,
-					Annotations: Annotations{},
-					Paradigms:   make([]*TypeParadigm, 0, 1),
-					Elements:    make([]*Type, 0, 1),
-				}
-				break
-			default:
-				break
-			}
+		// path
+		importer, hasImporter := scope.Imports.Find(ident.Name)
+		if !hasImporter {
+			err = errors.Warning("forg: import of selector field was not found").WithMeta("import", ident.Name)
 			break
-		case "encoding/json":
-			switch structName {
-			case "RawMessage":
-				typ = &Type{
-					Kind:        BasicKind,
-					Path:        path,
-					Name:        structName,
-					Annotations: Annotations{},
-					Paradigms:   make([]*TypeParadigm, 0, 1),
-					Elements:    make([]*Type, 0, 1),
-				}
-				break
-			default:
-				break
-			}
+		}
+		// name
+		name := expr.Sel.Name
+		builtin, isBuiltin := tryGetBuiltinType(importer.Path, name)
+		if isBuiltin {
+			element = builtin
 			break
-		case "github.com/aacfactory/json":
-			switch structName {
-			case "RawMessage", "Date", "Time":
-				typ = &Type{
-					Kind:        BasicKind,
-					Path:        path,
-					Name:        structName,
-					Annotations: Annotations{},
-					Paradigms:   make([]*TypeParadigm, 0, 1),
-					Elements:    make([]*Type, 0, 1),
-				}
-				break
-			case "Object", "Array":
-				typ = &Type{
-					Kind:        BuiltinKind,
-					Path:        path,
-					Name:        structName,
-					Annotations: Annotations{},
-					Paradigms:   make([]*TypeParadigm, 0, 1),
-					Elements:    make([]*Type, 0, 1),
-				}
-				break
-			default:
-				break
-			}
+		}
+		// find in mod
+		element, err = scope.Mod.ParseType(ctx, importer.Path, expr.Sel.Name)
+		break
+	case *ast.StarExpr:
+		expr := field.(*ast.StarExpr)
+		starElement, parseStarErr := types.parseStructFieldType(ctx, st, expr.X, scope)
+		if parseStarErr != nil {
+			err = parseStarErr
 			break
-		case "github.com/aacfactory/errors":
-			switch structName {
-			case "CodeError":
-				typ = &Type{
-					Kind:        BuiltinKind,
-					Path:        path,
-					Name:        structName,
-					Annotations: Annotations{},
-					Paradigms:   make([]*TypeParadigm, 0, 1),
-					Elements:    make([]*Type, 0, 1),
-				}
-				break
-			default:
-				break
-			}
-			break
-		case "github.com/aacfactory/service":
-			switch structName {
-			case "Empty":
-				typ = &Type{
-					Kind:        BuiltinKind,
-					Path:        path,
-					Name:        structName,
-					Annotations: Annotations{},
-					Paradigms:   make([]*TypeParadigm, 0, 1),
-					Elements:    make([]*Type, 0, 1),
-				}
-				break
-			default:
-				break
-			}
-			break
-		case "github.com/aacfactory/fns-contrib/databases/sql":
-			switch structName {
-			case "Date", "Time":
-				typ = &Type{
-					Kind:        BasicKind,
-					Path:        path,
-					Name:        structName,
-					Annotations: Annotations{},
-					Paradigms:   make([]*TypeParadigm, 0, 1),
-					Elements:    make([]*Type, 0, 1),
-				}
-				break
-			default:
-				break
-			}
-			break
-		case "github.com/aacfactory/fns-contrib/databases/sql/dal":
-			switch structName {
-			case "Pager":
-				typ = &Type{
-					Kind:        BuiltinKind,
-					Path:        path,
-					Name:        structName,
-					Annotations: Annotations{},
-					Paradigms:   make([]*TypeParadigm, 0, 1),
-					Elements:    make([]*Type, 0, 1),
-				}
-				// todo 泛型
-				break
-			default:
-				break
-			}
-			break
-		default:
-			break
+		}
+		element = &Type{
+			Kind:        PointerKind,
+			Path:        "",
+			Name:        "",
+			Annotations: nil,
+			Paradigms:   nil,
+			Tags:        nil,
+			Elements:    []*Type{starElement},
 		}
 		break
-	default:
-		break
-	}
-	ok = typ != nil
-	return
-}
-
-func (types *Types) tryParseStructFieldParadigms(st *Type, expr ast.Expr) (paradigms []*TypeParadigm, has bool) {
-	paradigms = make([]*TypeParadigm, 0, 1)
-	switch expr.(type) {
-	case *ast.Ident:
-		// todo has name and no name
-		ident := expr.(*ast.Ident).Name
-		for _, paradigm := range st.Paradigms {
-			if paradigm.Name == ident {
-				paradigms = append(paradigms, paradigm)
-				break
-			}
-		}
 	case *ast.ArrayType:
-		arrayType := expr.(*ast.ArrayType)
-		subs, hasSubs := types.tryParseStructFieldParadigms(st, arrayType.Elt)
-		if hasSubs {
-			paradigms = append(paradigms, subs...)
+		expr := field.(*ast.ArrayType)
+		arrayElement, parseArrayErr := types.parseStructFieldType(ctx, st, expr.Elt, scope)
+		if parseArrayErr != nil {
+			err = parseArrayErr
+			break
+		}
+		element = &Type{
+			Kind:        ArrayKind,
+			Path:        "",
+			Name:        "",
+			Annotations: nil,
+			Paradigms:   nil,
+			Tags:        nil,
+			Elements:    []*Type{arrayElement},
 		}
 		break
 	case *ast.MapType:
-		mapType := expr.(*ast.MapType)
-		keys, hasKeys := types.tryParseStructFieldParadigms(st, mapType.Key)
-		if hasKeys {
-			paradigms = append(paradigms, keys...)
+		expr := field.(*ast.MapType)
+		keyElement, parseKeyErr := types.parseStructFieldType(ctx, st, expr.Key, scope)
+		if parseKeyErr != nil {
+			err = parseKeyErr
+			break
 		}
-		values, hasValues := types.tryParseStructFieldParadigms(st, mapType.Value)
-		if hasValues {
-			paradigms = append(paradigms, values...)
+		if keyElement.Kind != BasicKind {
+			err = errors.Warning("forg: key kind of map kind field must be basic")
+			break
+		}
+		valueElement, parseValueErr := types.parseStructFieldType(ctx, st, expr.Value, scope)
+		if parseValueErr != nil {
+			err = parseValueErr
+			break
+		}
+		element = &Type{
+			Kind:        MapKind,
+			Path:        "",
+			Name:        "",
+			Annotations: nil,
+			Paradigms:   nil,
+			Tags:        nil,
+			Elements:    []*Type{keyElement, valueElement},
+		}
+		break
+	case *ast.IndexExpr:
+		expr := field.(*ast.IndexExpr)
+		paradigmType, parseParadigmTypeErr := types.parseStructFieldType(ctx, st, expr.Index, scope)
+		if parseParadigmTypeErr != nil {
+			err = parseParadigmTypeErr
+			break
+		}
+		element, err = types.parseStructFieldType(ctx, st, expr.X, scope)
+		if err != nil {
+			break
+		}
+		element.Paradigms = []*TypeParadigm{{
+			Name:  "",
+			Types: []*Type{paradigmType},
+		}}
+		break
+	case *ast.IndexListExpr:
+		expr := field.(*ast.IndexListExpr)
+		paradigmTypes := make([]*Type, 0, 1)
+		for _, index := range expr.Indices {
+			paradigmType, parseParadigmTypeErr := types.parseStructFieldType(ctx, st, index, scope)
+			if parseParadigmTypeErr != nil {
+				err = parseParadigmTypeErr
+				break
+			}
+			paradigmTypes = append(paradigmTypes, paradigmType)
+		}
+		element, err = types.parseStructFieldType(ctx, st, expr.X, scope)
+		if err != nil {
+			break
+		}
+		paradigms := make([]*TypeParadigm, 0, 1)
+		for _, paradigmType := range paradigmTypes {
+			paradigms = append(paradigms, &TypeParadigm{
+				Name:  "",
+				Types: []*Type{paradigmType},
+			})
 		}
 		break
 	default:
-		break
+		err = errors.Warning("forg: unsupported field type").WithMeta("type", reflect.TypeOf(field).String())
+		return
 	}
-	has = len(paradigms) > 0
 	return
 }
 
