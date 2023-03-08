@@ -14,6 +14,20 @@ type FunctionField struct {
 	Type      *Type
 }
 
+func (sf *FunctionField) Paths() (paths []string) {
+	paths = sf.Type.GetTopPaths()
+	if sf.Paradigms != nil && len(sf.Paradigms) > 0 {
+		for _, paradigm := range sf.Paradigms {
+			if paradigm.Types != nil && len(paradigm.Types) > 0 {
+				for _, pt := range paradigm.Types {
+					paths = append(paths, pt.GetTopPaths()...)
+				}
+			}
+		}
+	}
+	return
+}
+
 type Function struct {
 	mod             *Module
 	hostServiceName string
@@ -100,53 +114,18 @@ func (f *Function) Transactional() (has bool) {
 
 func (f *Function) FieldImports() (v Imports) {
 	v = Imports{}
+	paths := make([]string, 0, 1)
 	if f.Param != nil {
-		typePath := f.Param.Type.GetTopPath()
-		if typePath != "" {
-			v.Add(&Import{
-				Path:  typePath,
-				Alias: "",
-			})
-		}
-		if f.Param.Paradigms != nil && len(f.Param.Paradigms) > 0 {
-			for _, paradigm := range f.Param.Paradigms {
-				if paradigm.Types != nil && len(paradigm.Types) > 0 {
-					for _, tp := range paradigm.Types {
-						paradigmPath := tp.GetTopPath()
-						if paradigmPath != "" {
-							v.Add(&Import{
-								Path:  paradigmPath,
-								Alias: "",
-							})
-						}
-					}
-				}
-			}
-		}
+		paths = append(paths, f.Param.Paths()...)
 	}
 	if f.Result != nil {
-		typePath := f.Result.Type.GetTopPath()
-		if typePath != "" {
-			v.Add(&Import{
-				Path:  typePath,
-				Alias: "",
-			})
-		}
-		if f.Result.Paradigms != nil && len(f.Result.Paradigms) > 0 {
-			for _, paradigm := range f.Result.Paradigms {
-				if paradigm.Types != nil && len(paradigm.Types) > 0 {
-					for _, tp := range paradigm.Types {
-						paradigmPath := tp.GetTopPath()
-						if paradigmPath != "" {
-							v.Add(&Import{
-								Path:  paradigmPath,
-								Alias: "",
-							})
-						}
-					}
-				}
-			}
-		}
+		paths = append(paths, f.Result.Paths()...)
+	}
+	for _, path := range paths {
+		v.Add(&Import{
+			Path:  path,
+			Alias: "",
+		})
 	}
 	return
 }
@@ -249,7 +228,7 @@ func (f *Function) parseFieldType(ctx context.Context, e ast.Expr) (typ *Type, p
 			return
 		}
 		if decl.TypeParams != nil && decl.TypeParams.NumFields() > 0 {
-			paradigms, err = f.mod.types.parseTypeParadigms(ctx, decl.TypeParams, &TypeScope{
+			paradigms, err = f.parseFieldTypeParadigms(ctx, decl.TypeParams, &TypeScope{
 				Path:       f.path,
 				Mod:        f.mod,
 				Imports:    f.imports,
@@ -306,6 +285,11 @@ func (f *Function) parseFieldType(ctx context.Context, e ast.Expr) (typ *Type, p
 		err = errors.Warning("forg: field type only support value object or array")
 		return
 	}
+	return
+}
+
+func (f *Function) parseFieldTypeParadigms(ctx context.Context, params *ast.FieldList, scope *TypeScope) (paradigms []*TypeParadigm, err error) {
+	paradigms, err = f.mod.types.parseTypeParadigms(ctx, params, scope)
 	return
 }
 
