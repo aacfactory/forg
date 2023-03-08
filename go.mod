@@ -4,7 +4,7 @@ go 1.20
 
 require (
 	github.com/aacfactory/cases v1.1.0
-	github.com/aacfactory/errors v1.13.3
+	github.com/aacfactory/errors v1.13.4
 	github.com/aacfactory/gcg v1.0.4
 	golang.org/x/mod v0.8.0
 	golang.org/x/sync v0.1.0
