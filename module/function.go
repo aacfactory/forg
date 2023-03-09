@@ -201,7 +201,7 @@ func (f *Function) parseField(ctx context.Context, field *ast.Field) (v *Functio
 	name := field.Names[0].Name
 	typ, paradigms, parseTypeErr := f.parseFieldType(ctx, field.Type)
 	if parseTypeErr != nil {
-		err = parseTypeErr
+		err = errors.Warning("forg: parse field failed").WithMeta("field", name).WithCause(parseTypeErr)
 		return
 	}
 	v = &FunctionField{
@@ -214,82 +214,85 @@ func (f *Function) parseField(ctx context.Context, field *ast.Field) (v *Functio
 
 func (f *Function) parseFieldType(ctx context.Context, e ast.Expr) (typ *Type, paradigms []*TypeParadigm, err error) {
 	switch e.(type) {
-	case *ast.Ident:
-		expr := e.(*ast.Ident)
-		if expr.Obj == nil || expr.Obj.Decl == nil {
-			// builtin
-			err = errors.Warning("forg: field type only support value object or array")
+	case *ast.Ident, *ast.SelectorExpr:
+		typ, err = f.mod.types.parseExpr(ctx, e, &TypeScope{
+			Path:       f.path,
+			Mod:        f.mod,
+			Imports:    f.imports,
+			GenericDoc: "",
+		})
+		if err != nil {
 			return
 		}
-		// type in same file
-		decl, isTypeDecl := expr.Obj.Decl.(*ast.TypeSpec)
-		if !isTypeDecl {
-			err = errors.Warning("forg: field type only support value object or array")
+		_, isBasic := typ.Basic()
+		if isBasic {
+			err = errors.Warning("forg: field type only support value object")
 			return
 		}
-		if decl.TypeParams != nil && decl.TypeParams.NumFields() > 0 {
-			paradigms, err = f.parseFieldTypeParadigms(ctx, decl.TypeParams, &TypeScope{
+		break
+	case *ast.IndexExpr:
+		expr := e.(*ast.IndexExpr)
+		paradigmType, parseParadigmTypeErr := f.mod.types.parseExpr(ctx, expr.Index, &TypeScope{
+			Path:       f.path,
+			Mod:        f.mod,
+			Imports:    f.imports,
+			GenericDoc: "",
+		})
+		if parseParadigmTypeErr != nil {
+			err = errors.Warning("forg: parse paradigm failed").WithCause(parseParadigmTypeErr)
+			return
+		}
+		paradigms = []*TypeParadigm{{
+			Name:  "",
+			Types: []*Type{paradigmType},
+		}}
+		typ, err = f.mod.types.parseExpr(ctx, expr.X, &TypeScope{
+			Path:       f.path,
+			Mod:        f.mod,
+			Imports:    f.imports,
+			GenericDoc: "",
+		})
+		_, isBasic := typ.Basic()
+		if isBasic {
+			err = errors.Warning("forg: field type only support value object")
+			return
+		}
+		break
+	case *ast.IndexListExpr:
+		expr := e.(*ast.IndexListExpr)
+		paradigms = make([]*TypeParadigm, 0, 1)
+		for _, index := range expr.Indices {
+			paradigmType, parseParadigmTypeErr := f.mod.types.parseExpr(ctx, index, &TypeScope{
 				Path:       f.path,
 				Mod:        f.mod,
 				Imports:    f.imports,
 				GenericDoc: "",
 			})
-			if err != nil {
-				err = errors.Warning("forg: parse paradigms field failed").WithCause(err)
+			if parseParadigmTypeErr != nil {
+				err = errors.Warning("forg: parse paradigm failed").WithCause(parseParadigmTypeErr)
 				return
 			}
+			paradigms = append(paradigms, &TypeParadigm{
+				Name:  "",
+				Types: []*Type{paradigmType},
+			})
 		}
-		switch decl.Type.(type) {
-		case *ast.StructType, *ast.ArrayType:
-			typ, err = f.mod.ParseType(ctx, f.path, decl.Name.Name)
-			if err != nil {
-				return
-			}
-			break
-		default:
-			err = errors.Warning("forg: field type only support value object or array")
+		typ, err = f.mod.types.parseExpr(ctx, expr.X, &TypeScope{
+			Path:       f.path,
+			Mod:        f.mod,
+			Imports:    f.imports,
+			GenericDoc: "",
+		})
+		_, isBasic := typ.Basic()
+		if isBasic {
+			err = errors.Warning("forg: field type only support value object")
 			return
-		}
-		break
-	case *ast.SelectorExpr:
-		expr := e.(*ast.SelectorExpr)
-		ident, identOk := expr.X.(*ast.Ident)
-		if !identOk {
-			err = errors.Warning("forg: found selector field but x of expr is not indent")
-			return
-		}
-		selectorImport, hasSelectorImport := f.imports.Find(ident.Name)
-		if !hasSelectorImport {
-			err = errors.Warning("forg: found selector field but can not found importer about it")
-			return
-		}
-		selectorName := expr.Sel.Name
-		typ, err = f.mod.ParseType(ctx, selectorImport.Path, selectorName)
-		if err != nil {
-			return
-		}
-		break
-	case *ast.ArrayType:
-
-		typ = &Type{
-			Kind:        ArrayKind,
-			Path:        "",
-			Name:        "",
-			Annotations: nil,
-			Paradigms:   nil,
-			Tags:        nil,
-			Elements:    []*Type{},
 		}
 		break
 	default:
 		err = errors.Warning("forg: field type only support value object or array")
 		return
 	}
-	return
-}
-
-func (f *Function) parseFieldTypeParadigms(ctx context.Context, params *ast.FieldList, scope *TypeScope) (paradigms []*TypeParadigm, err error) {
-	paradigms, err = f.mod.types.parseTypeParadigms(ctx, params, scope)
 	return
 }
 
