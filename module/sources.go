@@ -41,29 +41,30 @@ func (sources *Sources) destinationPath(path string) (v string, err error) {
 	return
 }
 
-func (sources *Sources) ReadFile(path string, filename string) (file *ast.File, err error) {
+func (sources *Sources) ReadFile(path string, name string) (file *ast.File, filename string, err error) {
 	sources.locker.Lock()
 	reader, has := sources.readers[path]
 	sources.locker.Unlock()
 	if has {
 		for _, sf := range reader.files {
 			_, sfn := filepath.Split(sf.filename)
-			if sfn == filename {
+			if sfn == name {
 				file, err = sf.File()
 				return
 			}
 		}
-		err = errors.Warning("forg: read file failed").WithCause(errors.Warning("no file found")).WithMeta("path", path).WithMeta("file", filename).WithMeta("mod", sources.path)
+		err = errors.Warning("forg: read file failed").WithCause(errors.Warning("no file found")).WithMeta("path", path).WithMeta("file", name).WithMeta("mod", sources.path)
 		return
 	}
 	dir, dirErr := sources.destinationPath(path)
 	if dirErr != nil {
-		err = errors.Warning("forg: read file failed").WithCause(dirErr).WithMeta("path", path).WithMeta("file", filename).WithMeta("mod", sources.path)
+		err = errors.Warning("forg: read file failed").WithCause(dirErr).WithMeta("path", path).WithMeta("file", name).WithMeta("mod", sources.path)
 		return
 	}
-	file, err = parser.ParseFile(token.NewFileSet(), filepath.ToSlash(filepath.Join(dir, filename)), nil, parser.AllErrors|parser.ParseComments)
+	filename = filepath.ToSlash(filepath.Join(dir, name))
+	file, err = parser.ParseFile(token.NewFileSet(), filename, nil, parser.AllErrors|parser.ParseComments)
 	if err != nil {
-		err = errors.Warning("forg: read file failed").WithCause(err).WithMeta("path", path).WithMeta("file", filename).WithMeta("mod", sources.path)
+		err = errors.Warning("forg: read file failed").WithCause(err).WithMeta("path", path).WithMeta("file", name).WithMeta("mod", sources.path)
 		return
 	}
 	return

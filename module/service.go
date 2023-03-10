@@ -31,7 +31,7 @@ func (components Components) Swap(i, j int) {
 }
 
 func tryLoadService(mod *Module, path string) (service *Service, has bool, err error) {
-	f, readErr := mod.sources.ReadFile(path, "doc.go")
+	f, filename, readErr := mod.sources.ReadFile(path, "doc.go")
 	if readErr != nil {
 		err = errors.Warning("forg: parse service failed").WithCause(readErr).WithMeta("path", path).WithMeta("file", "doc.go")
 		return
@@ -51,6 +51,7 @@ func tryLoadService(mod *Module, path string) (service *Service, has bool, err e
 		err = errors.Warning("forg: parse service failed").WithCause(parseAnnotationsErr).WithMeta("path", path).WithMeta("file", "doc.go")
 		return
 	}
+
 	name, hasName := annotations.Get("service")
 	if !hasName {
 		return
@@ -62,11 +63,13 @@ func tryLoadService(mod *Module, path string) (service *Service, has bool, err e
 
 	service = &Service{
 		mod:         mod,
+		Dir:         filepath.Dir(filename),
 		Path:        path,
 		Name:        strings.ToLower(name),
 		Internal:    hasInternal,
 		Title:       title,
 		Description: Description,
+		Imports:     Imports{},
 		Functions:   make([]*Function, 0, 1),
 		Components:  make([]*Component, 0, 1),
 	}
@@ -82,6 +85,9 @@ func tryLoadService(mod *Module, path string) (service *Service, has bool, err e
 	}
 	sort.Sort(service.Functions)
 	sort.Sort(service.Components)
+
+	service.mergeImports()
+
 	return
 }
 
@@ -102,11 +108,13 @@ func (services Services) Swap(i, j int) {
 
 type Service struct {
 	mod         *Module
+	Dir         string
 	Path        string
 	Name        string
 	Internal    bool
 	Title       string
 	Description string
+	Imports     Imports
 	Functions   Functions
 	Components  Components
 }
@@ -237,5 +245,32 @@ func (service *Service) loadComponents() (err error) {
 		err = errors.Warning("forg: read service components dir failed").WithCause(readErr).WithMeta("service", service.Path)
 		return
 	}
+	return
+}
+
+func (service *Service) mergeImports() {
+	importer := Imports{}
+	importer.Add(&Import{
+		Path:  "context",
+		Alias: "",
+	})
+	importer.Add(&Import{
+		Path:  "github.com/aacfactory/errors",
+		Alias: "",
+	})
+	importer.Add(&Import{
+		Path:  "github.com/aacfactory/fns/service",
+		Alias: "",
+	})
+	importer.Add(&Import{
+		Path:  "github.com/aacfactory/fns/service/documents",
+		Alias: "",
+	})
+	imports := make([]Imports, 0, 1)
+	imports = append(imports, importer)
+	for _, function := range service.Functions {
+		imports = append(imports, function.imports)
+	}
+	service.Imports = MergeImports(imports)
 	return
 }

@@ -17,6 +17,10 @@ func TestMergeImports(t *testing.T) {
 		Alias: "",
 	})
 	i1.Add(&module.Import{
+		Path:  "a/a",
+		Alias: "",
+	})
+	i1.Add(&module.Import{
 		Path:  "a/b",
 		Alias: "",
 	})
