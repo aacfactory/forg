@@ -2,8 +2,10 @@ package module
 
 import (
 	"context"
+	"fmt"
 	"github.com/aacfactory/errors"
 	"go/ast"
+	"reflect"
 	"strings"
 	"time"
 )
@@ -12,6 +14,21 @@ type FunctionField struct {
 	Name      string
 	Paradigms []*TypeParadigm
 	Type      *Type
+}
+
+func (sf *FunctionField) String() (v string) {
+	v = fmt.Sprintf("%s %s", sf.Name, sf.Type.String())
+	if sf.Paradigms != nil && len(sf.Paradigms) > 0 {
+		paradigms := ""
+		for _, paradigm := range sf.Paradigms {
+			paradigms = paradigms + ", " + paradigm.String()
+		}
+		if paradigms != "" {
+			paradigms = paradigms[2:]
+		}
+		v = v + paradigms
+	}
+	return
 }
 
 func (sf *FunctionField) Paths() (paths []string) {
@@ -290,7 +307,7 @@ func (f *Function) parseFieldType(ctx context.Context, e ast.Expr) (typ *Type, p
 		}
 		break
 	default:
-		err = errors.Warning("forg: field type only support value object or array")
+		err = errors.Warning("forg: field type only support value object or array").WithMeta("expr", reflect.TypeOf(e).String())
 		return
 	}
 	return

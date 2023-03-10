@@ -32,6 +32,20 @@ type TypeParadigm struct {
 	Types []*Type
 }
 
+func (tp *TypeParadigm) String() (v string) {
+	types := ""
+	if tp.Types != nil && len(tp.Types) > 0 {
+		for _, typ := range tp.Types {
+			types = types + "| " + typ.String()
+		}
+		if types != "" {
+			types = types[2:]
+		}
+	}
+	v = fmt.Sprintf("[%s %s]", tp.Name, types)
+	return
+}
+
 var AnyType = &Type{
 	Kind:        AnyKind,
 	Path:        "",
@@ -50,6 +64,37 @@ type Type struct {
 	Paradigms   []*TypeParadigm
 	Tags        map[string]string
 	Elements    []*Type
+}
+
+func (typ *Type) String() (v string) {
+	switch typ.Kind {
+	case BasicKind:
+		v = typ.Name
+		break
+	case BuiltinKind, IdentKind, InterfaceKind, StructKind, StructFieldKind, PointerKind:
+		v = typ.Key()
+		break
+	case ArrayKind:
+		v = fmt.Sprintf("[]%s", typ.Elements[0].Key())
+		break
+	case MapKind:
+		v = fmt.Sprintf("map[%s]%s", typ.Elements[0].String(), typ.Elements[1].String())
+		break
+	case AnyKind:
+		v = "any"
+		break
+	case ParadigmKind:
+		elements := ""
+		for _, element := range typ.Elements {
+			elements = elements + "| " + element.String()
+		}
+		if elements != "" {
+			elements = elements[2:]
+		}
+		v = fmt.Sprintf("[%s %s]", typ.Name, elements)
+		break
+	}
+	return
 }
 
 func (typ *Type) Key() (key string) {
