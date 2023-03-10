@@ -293,8 +293,8 @@ func (mod *Module) Services() (services Services, err error) {
 		if !entry.IsDir() {
 			continue
 		}
-		path := filepath.Join(mod.Path, "modules", entry.Name())
-		docFilename := filepath.ToSlash(filepath.Join(mod.Dir, path, "doc.go"))
+		path := filepath.ToSlash(filepath.Join(mod.Path, "modules", entry.Name()))
+		docFilename := filepath.ToSlash(filepath.Join(mod.Dir, "modules", entry.Name(), "doc.go"))
 		if !files.ExistFile(docFilename) {
 			continue
 		}
@@ -305,6 +305,9 @@ func (mod *Module) Services() (services Services, err error) {
 		}
 		if !loaded {
 			continue
+		}
+		if mod.services == nil {
+			mod.services = make(map[string]*Service)
 		}
 		_, exist := mod.services[service.Name]
 		if exist {
@@ -329,7 +332,7 @@ func (mod *Module) findModuleByPath(ctx context.Context, path string) (v *Module
 	}
 	if mod.Requires != nil {
 		for _, require := range mod.Requires {
-			if strings.HasPrefix(path, require.Path) {
+			if path == require.Path || strings.HasPrefix(path, require.Path+"/") {
 				parseErr := require.parse(ctx, mod)
 				if parseErr != nil {
 					err = errors.Warning("forg: find module by path failed").
@@ -346,7 +349,7 @@ func (mod *Module) findModuleByPath(ctx context.Context, path string) (v *Module
 			}
 		}
 	}
-	if strings.HasPrefix(path, mod.Path) {
+	if path == mod.Path || strings.HasPrefix(path, mod.Path+"/") {
 		if mod.Replace != nil {
 			v = mod.Replace
 		} else {

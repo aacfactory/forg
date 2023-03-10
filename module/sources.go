@@ -28,8 +28,12 @@ type Sources struct {
 }
 
 func (sources *Sources) destinationPath(path string) (v string, err error) {
-	sub, cut := strings.CutPrefix(path, sources.path)
+	sub, cut := strings.CutPrefix(path, sources.path+"/")
 	if !cut {
+		if path == sources.path {
+			v = filepath.ToSlash(sources.dir)
+			return
+		}
 		err = errors.Warning("forg: path is not in module").WithMeta("path", path).WithMeta("mod", sources.path)
 		return
 	}
@@ -147,7 +151,7 @@ func (sources *Sources) FindTypeSpec(path string, name string) (spec *ast.TypeSp
 			return
 		}
 		if file.Decls == nil || len(file.Decls) == 0 {
-			return
+			continue
 		}
 		for _, declaration := range file.Decls {
 			genDecl, isGenDecl := declaration.(*ast.GenDecl)
@@ -227,11 +231,16 @@ func (sf *SourceFile) File() (file *ast.File, err error) {
 	defer sf.locker.Unlock()
 	if !sf.parsed {
 		file, err = parser.ParseFile(token.NewFileSet(), sf.filename, nil, parser.AllErrors|parser.ParseComments)
-		sf.file = file
-		sf.err = errors.Warning("forg: parse source failed").WithCause(err).WithMeta("file", sf.filename)
+		if err != nil {
+			err = errors.Warning("forg: parse source failed").WithCause(err).WithMeta("file", sf.filename)
+			sf.err = err
+		} else {
+			sf.file = file
+		}
 		sf.parsed = true
 		return
 	}
-	sf.locker.Unlock()
+	file = sf.file
+	err = sf.err
 	return
 }
