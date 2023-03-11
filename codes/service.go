@@ -94,12 +94,14 @@ func (s *ServiceFile) constFunctionNamesCode(ctx context.Context) (code gcg.Code
 }
 
 func (s *ServiceFile) proxyFunctionsCode(ctx context.Context) (code gcg.Code, err error) {
-
+	// todo: 参数和返回值的import ident在service的imports里找，其它的还是用自己的
 	return
 }
 
 func (s *ServiceFile) serviceCode(ctx context.Context) (code gcg.Code, err error) {
-	// todo: 关于element，用到什么就添加什么，且排好序，然后在oas中去重，保持在没有变动的情况下，生成的内容一致。
-	// 不重复生成的方式：是增加生成的内容hash比较，如果已经存在，则比对hash。
+	// todo:
+	// handle里的参数和返回值的import ident在service的imports里找，其它的还是用自己的
+	// 关于element，用到什么就添加什么，且排好序，然后在oas中去重，保持在没有变动的情况下，生成的内容一致。
+	// 不重复生成的方式：是增加生成的内容hash比较，如果已经存在，则比对hash(module.service.hash, 在service load里判断是否存在且没有变化)。
 	return
 }
