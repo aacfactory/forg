@@ -99,6 +99,7 @@ func (s *ServiceFile) proxyFunctionsCode(ctx context.Context) (code gcg.Code, er
 }
 
 func (s *ServiceFile) serviceCode(ctx context.Context) (code gcg.Code, err error) {
-
+	// todo: 关于element，用到什么就添加什么，且排好序，然后在oas中去重，保持在没有变动的情况下，生成的内容一致。
+	// 不重复生成的方式：是增加生成的内容hash比较，如果已经存在，则比对hash。
 	return
 }
