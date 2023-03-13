@@ -1,10 +1,13 @@
 package module
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"fmt"
 	"github.com/aacfactory/errors"
 	"go/ast"
+	"io"
 	"reflect"
 	"strings"
 	"time"
@@ -45,6 +48,11 @@ func (sf *FunctionField) Paths() (paths []string) {
 	return
 }
 
+type FunctionError struct {
+	Name         string
+	Descriptions map[string]string
+}
+
 type Function struct {
 	mod             *Module
 	hostServiceName string
@@ -82,6 +90,47 @@ func (f *Function) Title() (title string) {
 
 func (f *Function) Description() (description string) {
 	description = f.Annotations["description"]
+	return
+}
+
+func (f *Function) Errors() (errs []FunctionError) {
+	errs = make([]FunctionError, 0, 1)
+	p, has := f.Annotations["errors"]
+	if !has {
+		return
+	}
+	reader := bufio.NewReader(bytes.NewReader([]byte(p)))
+	current := FunctionError{}
+	for {
+		line, _, readErr := reader.ReadLine()
+		if readErr == io.EOF {
+			break
+		}
+		px := bytes.IndexByte(line, '+')
+		if px >= 0 {
+			if current.Name != "" {
+				errs = append(errs, current)
+			}
+			current.Name = string(bytes.TrimSpace(line[px+1:]))
+			current.Descriptions = make(map[string]string)
+			continue
+		}
+		dx := bytes.IndexByte(line, '-')
+		if dx > 0 {
+			description := bytes.TrimSpace(line[dx+1:])
+			idx := bytes.IndexByte(description, ':')
+			if idx < 0 {
+				continue
+			}
+			key := bytes.TrimSpace(description[0:idx])
+			val := bytes.TrimSpace(description[idx+1:])
+			current.Descriptions[string(key)] = string(val)
+			continue
+		}
+	}
+	if current.Name != "" {
+		errs = append(errs, current)
+	}
 	return
 }
 
