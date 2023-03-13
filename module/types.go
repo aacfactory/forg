@@ -27,6 +27,34 @@ const (
 
 type TypeKind int
 
+func (kind TypeKind) String() string {
+	switch kind {
+	case BasicKind:
+		return "basic"
+	case BuiltinKind:
+		return "builtin"
+	case IdentKind:
+		return "ident"
+	case InterfaceKind:
+		return "interface"
+	case StructKind:
+		return "struct"
+	case StructFieldKind:
+		return "struct_field"
+	case PointerKind:
+		return "pointer"
+	case ArrayKind:
+		return "array"
+	case MapKind:
+		return "map"
+	case AnyKind:
+		return "any"
+	case ParadigmKind:
+		return "paradigm"
+	}
+	return "unknown"
+}
+
 type TypeParadigm struct {
 	Name  string
 	Types []*Type
@@ -64,6 +92,29 @@ type Type struct {
 	Paradigms   []*TypeParadigm
 	Tags        map[string]string
 	Elements    []*Type
+}
+
+func (typ *Type) Pack() (err error) {
+	switch typ.Kind {
+	case IdentKind:
+
+		break
+	case StructKind:
+
+		break
+	case PointerKind:
+
+		break
+	case ArrayKind:
+
+		break
+	case MapKind:
+
+		break
+	default:
+		break
+	}
+	return
 }
 
 func (typ *Type) String() (v string) {
@@ -398,7 +449,8 @@ func (types *Types) parseExpr(ctx context.Context, x ast.Expr, scope *TypeScope)
 				expr.Name == "int" || expr.Name == "int8" || expr.Name == "int16" || expr.Name == "int32" || expr.Name == "int64" ||
 				expr.Name == "uint" || expr.Name == "uint8" || expr.Name == "uint16" || expr.Name == "uint32" || expr.Name == "uint64" ||
 				expr.Name == "float32" || expr.Name == "float64" ||
-				expr.Name == "complex64" || expr.Name == "complex128"
+				expr.Name == "complex64" || expr.Name == "complex128" ||
+				expr.Name == "byte"
 			if isBasic {
 				typ = &Type{
 					Kind:        BasicKind,
