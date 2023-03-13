@@ -28,7 +28,7 @@ func MapTypeToFunctionElementCode(ctx context.Context, typ *module.Type) (code g
 
 		break
 	case module.StructKind:
-
+		code, err = mapStructTypeToFunctionElementCode(ctx, typ)
 		break
 	case module.StructFieldKind:
 
@@ -91,12 +91,17 @@ func mapBasicTypeToFunctionElementCode(ctx context.Context, typ *module.Type) (c
 		err = errors.Warning("forg: unsupported basic type").WithMeta("name", typ.Name)
 		return
 	}
-	code, err = fillElementCode(ctx, typ, stmt)
+	code = stmt
 	return
 }
 
 func mapPointerTypeToFunctionElementCode(ctx context.Context, typ *module.Type) (code gcg.Code, err error) {
 	code, err = MapTypeToFunctionElementCode(ctx, typ.Elements[0])
+	return
+}
+
+func mapStructTypeToFunctionElementCode(ctx context.Context, typ *module.Type) (code gcg.Code, err error) {
+
 	return
 }
 
@@ -115,14 +120,16 @@ func mapArrayTypeToFunctionElementCode(ctx context.Context, typ *module.Type) (c
 			WithCause(elementCodeErr)
 		return
 	}
-
 	stmt := gcg.Statements()
-	stmt.Token(fmt.Sprintf("documents.Array(\"%s\", \"%s\")"))
-	// todo documents.Array(...)
-	return
-}
-
-func fillElementCode(ctx context.Context, typ *module.Type, stmt *gcg.Statement) (code gcg.Code, err error) {
-
+	stmt = stmt.Token("documents.Array(").Add(elementCode).Symbol(")")
+	title, hasTitle := typ.Annotations.Get("title")
+	if hasTitle {
+		stmt = stmt.Token(".SetTitle(").Token(fmt.Sprintf("\"%s\"", title)).Symbol(")")
+	}
+	description, hasDescription := typ.Annotations.Get("description")
+	if hasDescription {
+		stmt = stmt.Token(".SetDescription(").Token(fmt.Sprintf("\"%s\"", description)).Symbol(")")
+	}
+	code = stmt
 	return
 }
