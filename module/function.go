@@ -14,37 +14,17 @@ import (
 )
 
 type FunctionField struct {
-	Name      string
-	Paradigms []*TypeParadigm
-	Type      *Type
+	Name string
+	Type *Type
 }
 
 func (sf *FunctionField) String() (v string) {
 	v = fmt.Sprintf("%s %s", sf.Name, sf.Type.String())
-	if sf.Paradigms != nil && len(sf.Paradigms) > 0 {
-		paradigms := ""
-		for _, paradigm := range sf.Paradigms {
-			paradigms = paradigms + ", " + paradigm.String()
-		}
-		if paradigms != "" {
-			paradigms = paradigms[2:]
-		}
-		v = v + paradigms
-	}
 	return
 }
 
 func (sf *FunctionField) Paths() (paths []string) {
 	paths = sf.Type.GetTopPaths()
-	if sf.Paradigms != nil && len(sf.Paradigms) > 0 {
-		for _, paradigm := range sf.Paradigms {
-			if paradigm.Types != nil && len(paradigm.Types) > 0 {
-				for _, pt := range paradigm.Types {
-					paths = append(paths, pt.GetTopPaths()...)
-				}
-			}
-		}
-	}
 	return
 }
 
@@ -265,20 +245,19 @@ func (f *Function) parseField(ctx context.Context, field *ast.Field) (v *Functio
 		return
 	}
 	name := field.Names[0].Name
-	typ, paradigms, parseTypeErr := f.parseFieldType(ctx, field.Type)
+	typ, parseTypeErr := f.parseFieldType(ctx, field.Type)
 	if parseTypeErr != nil {
 		err = errors.Warning("forg: parse field failed").WithMeta("field", name).WithCause(parseTypeErr)
 		return
 	}
 	v = &FunctionField{
-		Name:      name,
-		Paradigms: paradigms,
-		Type:      typ,
+		Name: name,
+		Type: typ,
 	}
 	return
 }
 
-func (f *Function) parseFieldType(ctx context.Context, e ast.Expr) (typ *Type, paradigms []*TypeParadigm, err error) {
+func (f *Function) parseFieldType(ctx context.Context, e ast.Expr) (typ *Type, err error) {
 	switch e.(type) {
 	case *ast.Ident, *ast.SelectorExpr:
 		typ, err = f.mod.types.parseExpr(ctx, e, &TypeScope{
@@ -296,67 +275,8 @@ func (f *Function) parseFieldType(ctx context.Context, e ast.Expr) (typ *Type, p
 			return
 		}
 		break
-	case *ast.IndexExpr:
-		expr := e.(*ast.IndexExpr)
-		paradigmType, parseParadigmTypeErr := f.mod.types.parseExpr(ctx, expr.Index, &TypeScope{
-			Path:       f.path,
-			Mod:        f.mod,
-			Imports:    f.imports,
-			GenericDoc: "",
-		})
-		if parseParadigmTypeErr != nil {
-			err = errors.Warning("forg: parse paradigm failed").WithCause(parseParadigmTypeErr)
-			return
-		}
-		paradigms = []*TypeParadigm{{
-			Name:  "",
-			Types: []*Type{paradigmType},
-		}}
-		typ, err = f.mod.types.parseExpr(ctx, expr.X, &TypeScope{
-			Path:       f.path,
-			Mod:        f.mod,
-			Imports:    f.imports,
-			GenericDoc: "",
-		})
-		_, isBasic := typ.Basic()
-		if isBasic {
-			err = errors.Warning("forg: field type only support value object")
-			return
-		}
-		break
-	case *ast.IndexListExpr:
-		expr := e.(*ast.IndexListExpr)
-		paradigms = make([]*TypeParadigm, 0, 1)
-		for _, index := range expr.Indices {
-			paradigmType, parseParadigmTypeErr := f.mod.types.parseExpr(ctx, index, &TypeScope{
-				Path:       f.path,
-				Mod:        f.mod,
-				Imports:    f.imports,
-				GenericDoc: "",
-			})
-			if parseParadigmTypeErr != nil {
-				err = errors.Warning("forg: parse paradigm failed").WithCause(parseParadigmTypeErr)
-				return
-			}
-			paradigms = append(paradigms, &TypeParadigm{
-				Name:  "",
-				Types: []*Type{paradigmType},
-			})
-		}
-		typ, err = f.mod.types.parseExpr(ctx, expr.X, &TypeScope{
-			Path:       f.path,
-			Mod:        f.mod,
-			Imports:    f.imports,
-			GenericDoc: "",
-		})
-		_, isBasic := typ.Basic()
-		if isBasic {
-			err = errors.Warning("forg: field type only support value object")
-			return
-		}
-		break
 	default:
-		err = errors.Warning("forg: field type only support value object or array").WithMeta("expr", reflect.TypeOf(e).String())
+		err = errors.Warning("forg: field type only support no paradigms value object or array").WithMeta("expr", reflect.TypeOf(e).String())
 		return
 	}
 	return
