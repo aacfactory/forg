@@ -137,18 +137,33 @@ func (typ *Type) Basic() (name string, ok bool) {
 }
 
 func (typ *Type) warpReference(types *Types) {
-	if typ.Elements == nil || len(typ.Elements) == 0 {
-		return
+	if typ.Elements != nil && len(typ.Elements) > 0 {
+		for i, element := range typ.Elements {
+			if element.Kind == referenceKind {
+				ref, has := types.values.Load(typ.Key())
+				if has {
+					typ.Elements[i] = ref.(*Type)
+					element = ref.(*Type)
+				}
+			}
+			element.warpReference(types)
+		}
 	}
-	for i, element := range typ.Elements {
-		if element.Kind == referenceKind {
-			ref, has := types.values.Load(typ.Key())
-			if has {
-				typ.Elements[i] = ref.(*Type)
-				element = ref.(*Type)
+	if typ.Paradigms != nil && len(typ.Paradigms) > 0 {
+		for _, paradigm := range typ.Paradigms {
+			if paradigm.Types != nil && len(paradigm.Types) > 0 {
+				for i, pt := range paradigm.Types {
+					if pt.Kind == referenceKind {
+						ref, has := types.values.Load(typ.Key())
+						if has {
+							typ.Elements[i] = ref.(*Type)
+							pt = ref.(*Type)
+						}
+					}
+					pt.warpReference(types)
+				}
 			}
 		}
-		element.warpReference(types)
 	}
 	return
 }
