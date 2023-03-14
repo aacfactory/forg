@@ -119,15 +119,15 @@ func mapStructTypeToFunctionElementCode(ctx context.Context, typ *module.Type) (
 	stmt = stmt.Token("documents.Struct(").Token(fmt.Sprintf("\"%s\",\"%s\"", typ.Path, typ.Name)).Symbol(")")
 	title, hasTitle := typ.Annotations.Get("title")
 	if hasTitle {
-		stmt = stmt.Token(".SetTitle(").Token(fmt.Sprintf("\"%s\"", title)).Symbol(")")
+		stmt = stmt.Dot().Line().Token("SetTitle(").Token(fmt.Sprintf("\"%s\"", title)).Symbol(")")
 	}
 	description, hasDescription := typ.Annotations.Get("description")
 	if hasDescription {
-		stmt = stmt.Token(".SetDescription(").Token(fmt.Sprintf("\"%s\"", description)).Symbol(")")
+		stmt = stmt.Dot().Line().Token("SetDescription(").Token(fmt.Sprintf("\"%s\"", description)).Symbol(")")
 	}
 	_, hasDeprecated := typ.Annotations.Get("deprecated")
 	if hasDeprecated {
-		stmt = stmt.Token(".AsDeprecated()")
+		stmt = stmt.Dot().Line().Token("AsDeprecated()")
 	}
 	for _, field := range typ.Elements {
 		name, hasName := field.Tags["json"]
@@ -148,15 +148,15 @@ func mapStructTypeToFunctionElementCode(ctx context.Context, typ *module.Type) (
 		elementStmt := elementCode.(*gcg.Statement)
 		fieldTitle, hasFieldTitle := field.Annotations.Get("title")
 		if hasFieldTitle {
-			elementStmt = elementStmt.Token(".SetTitle(").Token(fmt.Sprintf("\"%s\"", fieldTitle)).Symbol(")")
+			elementStmt = elementStmt.Dot().Line().Token("SetTitle(").Token(fmt.Sprintf("\"%s\"", fieldTitle)).Symbol(")")
 		}
 		fieldDescription, hasFieldDescription := field.Annotations.Get("description")
 		if hasFieldDescription {
-			elementStmt = elementStmt.Token(".SetDescription(").Token(fmt.Sprintf("\"%s\"", fieldDescription)).Symbol(")")
+			elementStmt = elementStmt.Dot().Line().Token("SetDescription(").Token(fmt.Sprintf("\"%s\"", fieldDescription)).Symbol(")")
 		}
 		_, hasFieldDeprecated := field.Annotations.Get("deprecated")
 		if hasFieldDeprecated {
-			elementStmt = elementStmt.Token(".AsDeprecated()")
+			elementStmt = elementStmt.Dot().Line().Token("AsDeprecated()")
 		}
 		// enum
 		fieldEnum, hasFieldEnum := field.Annotations["enum"]
@@ -168,7 +168,7 @@ func mapStructTypeToFunctionElementCode(ctx context.Context, typ *module.Type) (
 			}
 			if fieldEnumsCodeToken != "" {
 				fieldEnumsCodeToken = fieldEnumsCodeToken[2:]
-				elementStmt = elementStmt.Token(".AddEnum").Symbol("(").Token(fieldEnumsCodeToken).Symbol(")")
+				elementStmt = elementStmt.Dot().Line().Token("AddEnum").Symbol("(").Token(fieldEnumsCodeToken).Symbol(")")
 			}
 		}
 		// validation
@@ -176,7 +176,7 @@ func mapStructTypeToFunctionElementCode(ctx context.Context, typ *module.Type) (
 		if hasFieldValidate && fieldValidate != "" {
 			fieldRequired := strings.Contains(fieldValidate, "required")
 			if fieldRequired {
-				elementStmt = elementStmt.Token(".AsRequired()")
+				elementStmt = elementStmt.Dot().Line().Token("AsRequired()")
 			}
 			fieldValidateMessage, hasFieldValidateMessage := field.Tags["validate-message"]
 			if !hasFieldValidateMessage {
@@ -205,7 +205,7 @@ func mapStructTypeToFunctionElementCode(ctx context.Context, typ *module.Type) (
 			if fieldValidateMessageI18nsCodeToken != "" {
 				fieldValidateMessageI18nsCodeToken = fieldValidateMessageI18nsCodeToken[2:]
 			}
-			elementStmt = elementStmt.Token(".SetValidation(").
+			elementStmt = elementStmt.Dot().Line().Token("SetValidation(").
 				Token("documents.NewElementValidation(").
 				Token(fmt.Sprintf("\"%s\"", fieldValidateMessage)).
 				Symbol(", ").
@@ -245,11 +245,11 @@ func mapArrayTypeToFunctionElementCode(ctx context.Context, typ *module.Type) (c
 	stmt = stmt.Token("documents.Array(").Add(elementCode).Symbol(")")
 	title, hasTitle := typ.Annotations.Get("title")
 	if hasTitle {
-		stmt = stmt.Token(".SetTitle(").Token(fmt.Sprintf("\"%s\"", title)).Symbol(")")
+		stmt = stmt.Dot().Line().Token("SetTitle(").Token(fmt.Sprintf("\"%s\"", title)).Symbol(")")
 	}
 	description, hasDescription := typ.Annotations.Get("description")
 	if hasDescription {
-		stmt = stmt.Token(".SetDescription(").Token(fmt.Sprintf("\"%s\"", description)).Symbol(")")
+		stmt = stmt.Dot().Line().Token("SetDescription(").Token(fmt.Sprintf("\"%s\"", description)).Symbol(")")
 	}
 	code = stmt
 	return
