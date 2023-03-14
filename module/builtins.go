@@ -224,7 +224,7 @@ func init() {
 					Paradigms:   nil,
 					Tags:        nil,
 					Elements: []*Type{{
-						Kind:        ParadigmKind,
+						Kind:        ParadigmElementKind,
 						Path:        "",
 						Name:        "E",
 						Annotations: nil,
