@@ -195,7 +195,7 @@ func (f *Function) Parse(ctx context.Context) (err error) {
 			WithMeta("service", f.hostServiceName).WithMeta("function", f.Ident).WithMeta("file", f.filename)
 		return
 	}
-	if !isContextType(params.List[0].Type, f.imports) {
+	if !f.mod.types.isContextType(params.List[0].Type, f.imports) {
 		err = errors.Warning("forg: parse function failed").WithCause(errors.Warning("first param must be context.Context")).
 			WithMeta("service", f.hostServiceName).WithMeta("function", f.Ident).WithMeta("file", f.filename)
 		return
@@ -217,13 +217,13 @@ func (f *Function) Parse(ctx context.Context) (err error) {
 		return
 	}
 	if len(results.List) == 1 {
-		if !isCodeErrorType(results.List[0].Type, f.imports) {
+		if !f.mod.types.isCodeErrorType(results.List[0].Type, f.imports) {
 			err = errors.Warning("forg: parse function failed").WithCause(errors.Warning("the last results must github.com/aacfactory/errors.CodeError")).
 				WithMeta("service", f.hostServiceName).WithMeta("function", f.Ident).WithMeta("file", f.filename)
 			return
 		}
 	} else {
-		if !isCodeErrorType(results.List[1].Type, f.imports) {
+		if !f.mod.types.isCodeErrorType(results.List[1].Type, f.imports) {
 			err = errors.Warning("forg: parse function failed").WithCause(errors.Warning("the last results must github.com/aacfactory/errors.CodeError")).
 				WithMeta("service", f.hostServiceName).WithMeta("function", f.Ident).WithMeta("file", f.filename)
 			return

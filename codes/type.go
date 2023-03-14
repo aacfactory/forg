@@ -14,6 +14,7 @@ func MapTypeToFunctionElementCode(ctx context.Context, typ *module.Type) (code g
 			WithMeta("path", typ.Path).WithMeta("name", typ.Name).WithMeta("kind", typ.Kind.String()).
 			WithCause(ctx.Err())
 	}
+
 	switch typ.Kind {
 	case module.BasicKind:
 		code, err = mapBasicTypeToFunctionElementCode(ctx, typ)
@@ -101,6 +102,28 @@ func mapPointerTypeToFunctionElementCode(ctx context.Context, typ *module.Type) 
 }
 
 func mapStructTypeToFunctionElementCode(ctx context.Context, typ *module.Type) (code gcg.Code, err error) {
+	if typ.ParadigmsPacked != nil {
+		typ = typ.ParadigmsPacked
+	}
+	stmt := gcg.Statements()
+	stmt = stmt.Token("documents.Struct(").Token(fmt.Sprintf("\"%s\",\"%s\"", typ.Path, typ.Name)).Symbol(")")
+	title, hasTitle := typ.Annotations.Get("title")
+	if hasTitle {
+		stmt = stmt.Token(".SetTitle(").Token(fmt.Sprintf("\"%s\"", title)).Symbol(")")
+	}
+	description, hasDescription := typ.Annotations.Get("description")
+	if hasDescription {
+		stmt = stmt.Token(".SetDescription(").Token(fmt.Sprintf("\"%s\"", description)).Symbol(")")
+	}
+	_, hasDeprecated := typ.Annotations.Get("deprecated")
+	if hasDeprecated {
+		stmt = stmt.Token(".AsDeprecated()")
+	}
+	//
+
+	for _, element := range typ.Elements {
+
+	}
 
 	return
 }
@@ -110,7 +133,8 @@ func mapArrayTypeToFunctionElementCode(ctx context.Context, typ *module.Type) (c
 	name, isBasic := element.Basic()
 	if isBasic && (name == "byte" || name == "uint8") {
 		stmt := gcg.Statements()
-		stmt.Token(fmt.Sprintf("documents.Bytes()"))
+		stmt = stmt.Token(fmt.Sprintf("documents.Bytes()"))
+		code = stmt
 		return
 	}
 	elementCode, elementCodeErr := MapTypeToFunctionElementCode(ctx, element)

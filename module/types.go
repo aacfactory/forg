@@ -22,6 +22,7 @@ const (
 	MapKind
 	AnyKind
 	ParadigmKind
+	ParadigmElementKind
 	referenceKind
 )
 
@@ -51,6 +52,8 @@ func (kind TypeKind) String() string {
 		return "any"
 	case ParadigmKind:
 		return "paradigm"
+	case ParadigmElementKind:
+		return "paradigm_element"
 	}
 	return "unknown"
 }
@@ -85,36 +88,14 @@ var AnyType = &Type{
 }
 
 type Type struct {
-	Kind        TypeKind
-	Path        string
-	Name        string
-	Annotations Annotations
-	Paradigms   []*TypeParadigm
-	Tags        map[string]string
-	Elements    []*Type
-}
-
-func (typ *Type) Pack() (err error) {
-	switch typ.Kind {
-	case IdentKind:
-
-		break
-	case StructKind:
-
-		break
-	case PointerKind:
-
-		break
-	case ArrayKind:
-
-		break
-	case MapKind:
-
-		break
-	default:
-		break
-	}
-	return
+	Kind            TypeKind
+	Path            string
+	Name            string
+	Annotations     Annotations
+	Paradigms       []*TypeParadigm
+	Tags            map[string]string
+	Elements        []*Type
+	ParadigmsPacked *Type
 }
 
 func (typ *Type) String() (v string) {
@@ -134,7 +115,7 @@ func (typ *Type) String() (v string) {
 	case AnyKind:
 		v = "any"
 		break
-	case ParadigmKind:
+	case ParadigmElementKind:
 		elements := ""
 		for _, element := range typ.Elements {
 			elements = elements + "| " + element.String()
@@ -480,7 +461,7 @@ func (types *Types) parseExpr(ctx context.Context, x ast.Expr, scope *TypeScope)
 				break
 			}
 			typ = &Type{
-				Kind:        ParadigmKind,
+				Kind:        ParadigmElementKind,
 				Path:        "",
 				Name:        paradigm.Name,
 				Annotations: nil,
@@ -592,14 +573,30 @@ func (types *Types) parseExpr(ctx context.Context, x ast.Expr, scope *TypeScope)
 			err = parseParadigmTypeErr
 			break
 		}
-		typ, err = types.parseExpr(ctx, expr.X, scope)
-		if err != nil {
-			break
-		}
-		typ.Paradigms = []*TypeParadigm{{
+		paradigms := []*TypeParadigm{{
 			Name:  "",
 			Types: []*Type{paradigmType},
 		}}
+		xType, parseXErr := types.parseExpr(ctx, expr.X, scope)
+		if parseXErr != nil {
+			err = parseXErr
+			break
+		}
+		packed, packErr := types.packedTypeWithParadigms(ctx, xType, paradigms)
+		if packErr != nil {
+			err = packErr
+			break
+		}
+		typ = &Type{
+			Kind:            ParadigmKind,
+			Path:            "",
+			Name:            "",
+			Annotations:     nil,
+			Paradigms:       paradigms,
+			Tags:            nil,
+			Elements:        []*Type{xType},
+			ParadigmsPacked: packed,
+		}
 		break
 	case *ast.IndexListExpr:
 		expr := x.(*ast.IndexListExpr)
@@ -612,10 +609,6 @@ func (types *Types) parseExpr(ctx context.Context, x ast.Expr, scope *TypeScope)
 			}
 			paradigmTypes = append(paradigmTypes, paradigmType)
 		}
-		typ, err = types.parseExpr(ctx, expr.X, scope)
-		if err != nil {
-			break
-		}
 		paradigms := make([]*TypeParadigm, 0, 1)
 		for _, paradigmType := range paradigmTypes {
 			paradigms = append(paradigms, &TypeParadigm{
@@ -623,7 +616,26 @@ func (types *Types) parseExpr(ctx context.Context, x ast.Expr, scope *TypeScope)
 				Types: []*Type{paradigmType},
 			})
 		}
-		typ.Paradigms = paradigms
+		xType, parseXErr := types.parseExpr(ctx, expr.X, scope)
+		if parseXErr != nil {
+			err = parseXErr
+			break
+		}
+		packed, packErr := types.packedTypeWithParadigms(ctx, xType, paradigms)
+		if packErr != nil {
+			err = packErr
+			break
+		}
+		typ = &Type{
+			Kind:            ParadigmKind,
+			Path:            "",
+			Name:            "",
+			Annotations:     nil,
+			Paradigms:       paradigms,
+			Tags:            nil,
+			Elements:        []*Type{xType},
+			ParadigmsPacked: packed,
+		}
 		break
 	default:
 		err = errors.Warning("forg: unsupported field type").WithMeta("type", reflect.TypeOf(x).String())
@@ -676,7 +688,6 @@ func (types *Types) parseStructType(ctx context.Context, spec *ast.TypeSpec, sco
 			return
 		}
 		typ.Paradigms = paradigms
-
 	}
 	// elements
 	if st.Fields != nil && st.Fields.NumFields() > 0 {
@@ -763,7 +774,12 @@ func (types *Types) parseStructType(ctx context.Context, spec *ast.TypeSpec, sco
 	return
 }
 
-func isContextType(expr ast.Expr, imports Imports) (ok bool) {
+func (types *Types) packedTypeWithParadigms(ctx context.Context, typ *Type, paradigms []*TypeParadigm) (v *Type, err error) {
+
+	return
+}
+
+func (types *Types) isContextType(expr ast.Expr, imports Imports) (ok bool) {
 	e, isSelector := expr.(*ast.SelectorExpr)
 	if !isSelector {
 		return
@@ -794,7 +810,7 @@ func isContextType(expr ast.Expr, imports Imports) (ok bool) {
 	return
 }
 
-func isCodeErrorType(expr ast.Expr, imports Imports) (ok bool) {
+func (types *Types) isCodeErrorType(expr ast.Expr, imports Imports) (ok bool) {
 	e, isSelector := expr.(*ast.SelectorExpr)
 	if !isSelector {
 		return
