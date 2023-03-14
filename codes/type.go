@@ -1,11 +1,14 @@
 package codes
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"fmt"
 	"github.com/aacfactory/errors"
 	"github.com/aacfactory/forg/module"
 	"github.com/aacfactory/gcg"
+	"strings"
 )
 
 func MapTypeToFunctionElementCode(ctx context.Context, typ *module.Type) (code gcg.Code, err error) {
@@ -31,9 +34,6 @@ func MapTypeToFunctionElementCode(ctx context.Context, typ *module.Type) (code g
 	case module.StructKind:
 		code, err = mapStructTypeToFunctionElementCode(ctx, typ)
 		break
-	case module.StructFieldKind:
-
-		break
 	case module.PointerKind:
 		code, err = mapPointerTypeToFunctionElementCode(ctx, typ)
 		break
@@ -45,6 +45,11 @@ func MapTypeToFunctionElementCode(ctx context.Context, typ *module.Type) (code g
 		break
 	case module.AnyKind:
 
+	case module.ParadigmKind:
+		// todo packed
+		break
+	case module.ParadigmElementKind:
+		// todo packed
 		break
 	default:
 
@@ -53,6 +58,11 @@ func MapTypeToFunctionElementCode(ctx context.Context, typ *module.Type) (code g
 }
 
 func mapBasicTypeToFunctionElementCode(ctx context.Context, typ *module.Type) (code gcg.Code, err error) {
+	if ctx.Err() != nil {
+		err = errors.Warning("forg: map type to function document element code, failed").
+			WithMeta("path", typ.Path).WithMeta("name", typ.Name).WithMeta("kind", typ.Kind.String()).
+			WithCause(ctx.Err())
+	}
 	stmt := gcg.Statements()
 	switch typ.Name {
 	case "string":
@@ -119,12 +129,99 @@ func mapStructTypeToFunctionElementCode(ctx context.Context, typ *module.Type) (
 	if hasDeprecated {
 		stmt = stmt.Token(".AsDeprecated()")
 	}
-	//
+	for _, field := range typ.Elements {
+		name, hasName := field.Tags["json"]
+		if !hasName {
+			name = field.Name
+		}
+		if name == "-" {
+			continue
+		}
+		elementCode, elementCodeErr := MapTypeToFunctionElementCode(ctx, field.Elements[0])
+		if elementCodeErr != nil {
+			err = errors.Warning("forg: map struct type to function element code failed").
+				WithMeta("name", typ.Name).WithMeta("path", typ.Path).
+				WithMeta("field", field.Name).
+				WithCause(elementCodeErr)
+			return
+		}
+		elementStmt := elementCode.(*gcg.Statement)
+		fieldTitle, hasFieldTitle := field.Annotations.Get("title")
+		if hasFieldTitle {
+			elementStmt = elementStmt.Token(".SetTitle(").Token(fmt.Sprintf("\"%s\"", fieldTitle)).Symbol(")")
+		}
+		fieldDescription, hasFieldDescription := field.Annotations.Get("description")
+		if hasFieldDescription {
+			elementStmt = elementStmt.Token(".SetDescription(").Token(fmt.Sprintf("\"%s\"", fieldDescription)).Symbol(")")
+		}
+		_, hasFieldDeprecated := field.Annotations.Get("deprecated")
+		if hasFieldDeprecated {
+			elementStmt = elementStmt.Token(".AsDeprecated()")
+		}
+		// enum
+		fieldEnum, hasFieldEnum := field.Annotations["enum"]
+		if hasFieldEnum && fieldEnum != "" {
+			fieldEnums := strings.Split(fieldEnum, ",")
+			fieldEnumsCodeToken := ""
+			for _, enumValue := range fieldEnums {
+				fieldEnumsCodeToken = fieldEnumsCodeToken + `, "` + strings.TrimSpace(enumValue) + `"`
+			}
+			if fieldEnumsCodeToken != "" {
+				fieldEnumsCodeToken = fieldEnumsCodeToken[2:]
+				elementStmt = elementStmt.Token(".AddEnum").Symbol("(").Token(fieldEnumsCodeToken).Symbol(")")
+			}
+		}
+		// validation
+		fieldValidate, hasFieldValidate := field.Tags["validate"]
+		if hasFieldValidate && fieldValidate != "" {
+			fieldRequired := strings.Contains(fieldValidate, "required")
+			if fieldRequired {
+				elementStmt = elementStmt.Token(".AsRequired()")
+			}
+			fieldValidateMessage, hasFieldValidateMessage := field.Tags["validate-message"]
+			if !hasFieldValidateMessage {
+				fieldValidateMessage = field.Tags["message"]
+			}
+			fieldValidateMessageI18ns := make([]string, 0, 1)
+			validateMessageI18n, hasValidateMessageI18n := field.Annotations.Get("validate-message-i18n")
+			if hasValidateMessageI18n && validateMessageI18n != "" {
+				reader := bufio.NewReader(bytes.NewReader([]byte(validateMessageI18n)))
+				for {
+					line, _, readErr := reader.ReadLine()
+					if readErr != nil {
+						break
+					}
+					idx := bytes.IndexByte(line, ':')
+					if idx > 0 && idx < len(line) {
+						fieldValidateMessageI18ns = append(fieldValidateMessageI18ns, strings.TrimSpace(string(line[0:idx])))
+						fieldValidateMessageI18ns = append(fieldValidateMessageI18ns, strings.TrimSpace(string(line[idx+1:])))
+					}
+				}
+			}
+			fieldValidateMessageI18nsCodeToken := ""
+			for _, fieldValidateMessageI18n := range fieldValidateMessageI18ns {
+				fieldValidateMessageI18nsCodeToken = fieldValidateMessageI18nsCodeToken + `, "` + fieldValidateMessageI18n + `"`
+			}
+			if fieldValidateMessageI18nsCodeToken != "" {
+				fieldValidateMessageI18nsCodeToken = fieldValidateMessageI18nsCodeToken[2:]
+			}
+			elementStmt = elementStmt.Token(".SetValidation(").
+				Token("documents.NewElementValidation(").
+				Token(fmt.Sprintf("\"%s\"", fieldValidateMessage)).
+				Symbol(", ").
+				Token(fieldValidateMessageI18nsCodeToken).
+				Symbol(")").
+				Symbol(")")
+		}
 
-	for _, element := range typ.Elements {
-
+		stmt = stmt.Dot().Line().
+			Token("AddProperty(").Line().
+			Token(fmt.Sprintf("\"%s\"", name)).Symbol(",").Line().
+			Add(elementStmt).Symbol(",").Line().
+			Symbol(")")
 	}
 
+	code = stmt
 	return
 }
 
