@@ -200,6 +200,167 @@ func (typ *Type) warpReference(types *Types) {
 	return
 }
 
+func (typ *Type) Copied() (v *Type) {
+	v = &Type{
+		Kind:            typ.Kind,
+		Path:            typ.Path,
+		Name:            typ.Name,
+		Annotations:     typ.Annotations,
+		Paradigms:       typ.Paradigms,
+		Tags:            typ.Tags,
+		Elements:        nil,
+		ParadigmsPacked: typ.ParadigmsPacked,
+	}
+	if typ.Elements != nil && len(typ.Elements) > 0 {
+		v.Elements = make([]*Type, 0, 1)
+		for _, element := range typ.Elements {
+			v.Elements = append(v.Elements, element.Copied())
+		}
+	}
+	return
+}
+
+func (typ *Type) packParadigms(ctx context.Context) (err error) {
+	if typ.ParadigmsPacked != nil {
+		return
+	}
+	switch typ.Kind {
+	case IdentKind, PointerKind, ArrayKind:
+		if typ.Elements == nil || len(typ.Elements) == 0 {
+			err = errors.Warning("element is nil")
+			break
+		}
+		err = typ.Elements[0].packParadigms(ctx)
+		break
+	case MapKind:
+		if typ.Elements == nil || len(typ.Elements) != 2 {
+			err = errors.Warning("element is nil or length is not 2")
+			break
+		}
+		err = typ.Elements[0].packParadigms(ctx)
+		if err != nil {
+			break
+		}
+		err = typ.Elements[1].packParadigms(ctx)
+		if err != nil {
+			break
+		}
+		break
+	case StructKind:
+		if typ.Paradigms == nil || len(typ.Paradigms) == 0 {
+			break
+		}
+		for _, field := range typ.Elements {
+			err = field.packParadigms(ctx)
+			if err != nil {
+				break
+			}
+		}
+		break
+	case StructFieldKind:
+		err = typ.Elements[0].packParadigms(ctx)
+		if err != nil {
+			err = errors.Warning("forg: pack struct field paradigms failed").WithMeta("name", typ.Name).WithCause(err)
+			break
+		}
+		break
+	case ParadigmKind:
+		var topParadigms []*TypeParadigm
+		packing := ctx.Value("packing")
+		if packing != nil {
+			isPacking := false
+			topParadigms, isPacking = packing.([]*TypeParadigm)
+			if !isPacking {
+				err = errors.Warning("forg: context packing value must be []*TypeParadigm")
+				break
+			}
+		}
+
+		pt := typ.Elements[0]
+		paradigms := make([]*TypeParadigm, 0, 1)
+		paradigmKeys := ""
+		stop := false
+		for i, paradigm := range typ.Paradigms {
+			if paradigm.Types[0].Kind == ParadigmElementKind {
+				if topParadigms == nil || len(topParadigms) == 0 {
+					// 其所在类型也是个泛型，不用盒化
+					stop = true
+					break
+				}
+				matched := false
+				for _, topParadigm := range topParadigms {
+					if topParadigm.Name == paradigm.Name {
+						paradigm = topParadigm
+						matched = true
+						break
+					}
+				}
+				if !matched {
+					err = errors.Warning("forg: can not found paradigm instance from top paradigm instances")
+					break
+				}
+			}
+			paradigms = append(paradigms, &TypeParadigm{
+				Name:  pt.Paradigms[i].Name,
+				Types: paradigm.Types,
+			})
+			paradigmKeys = paradigmKeys + "+" + paradigm.Types[0].Key()
+		}
+		if err != nil {
+			break
+		}
+		if stop {
+			break
+		}
+		packed := pt.Copied()
+		err = packed.packParadigms(context.WithValue(ctx, "packing", paradigms))
+		if err != nil {
+			break
+		}
+		packed.Name = packed.Name + paradigmKeys
+		typ.ParadigmsPacked = packed
+		break
+	case ParadigmElementKind:
+		if typ.ParadigmsPacked != nil {
+			break
+		}
+		var topParadigms []*TypeParadigm
+		packing := ctx.Value("packing")
+		if packing != nil {
+			isPacking := false
+			topParadigms, isPacking = packing.([]*TypeParadigm)
+			if !isPacking {
+				err = errors.Warning("forg: context packing value must be []*TypeParadigm")
+				break
+			}
+		}
+		if topParadigms == nil || len(topParadigms) == 0 {
+			err = errors.Warning("forg: there is no packing in context")
+			break
+		}
+		for _, paradigm := range topParadigms {
+			if paradigm.Name == typ.Name {
+				typ.ParadigmsPacked = paradigm.Types[0]
+				break
+			}
+		}
+		err = errors.Warning("forg: pack missed")
+		break
+	default:
+		break
+	}
+	if err != nil {
+		err = errors.Warning("forg: type pack paradigms failed").
+			WithMeta("path", typ.Path).
+			WithMeta("name", typ.Name).
+			WithMeta("kind", typ.Kind.String()).
+			WithCause(err)
+		return
+	}
+
+	return
+}
+
 type TypeScope struct {
 	Path       string
 	Mod        *Module
@@ -582,11 +743,6 @@ func (types *Types) parseExpr(ctx context.Context, x ast.Expr, scope *TypeScope)
 			err = parseXErr
 			break
 		}
-		packed, packErr := types.packedTypeWithParadigms(ctx, xType, paradigms)
-		if packErr != nil {
-			err = packErr
-			break
-		}
 		typ = &Type{
 			Kind:            ParadigmKind,
 			Path:            "",
@@ -595,7 +751,12 @@ func (types *Types) parseExpr(ctx context.Context, x ast.Expr, scope *TypeScope)
 			Paradigms:       paradigms,
 			Tags:            nil,
 			Elements:        []*Type{xType},
-			ParadigmsPacked: packed,
+			ParadigmsPacked: nil,
+		}
+		packErr := typ.packParadigms(ctx)
+		if packErr != nil {
+			err = packErr
+			break
 		}
 		break
 	case *ast.IndexListExpr:
@@ -621,11 +782,6 @@ func (types *Types) parseExpr(ctx context.Context, x ast.Expr, scope *TypeScope)
 			err = parseXErr
 			break
 		}
-		packed, packErr := types.packedTypeWithParadigms(ctx, xType, paradigms)
-		if packErr != nil {
-			err = packErr
-			break
-		}
 		typ = &Type{
 			Kind:            ParadigmKind,
 			Path:            "",
@@ -634,7 +790,12 @@ func (types *Types) parseExpr(ctx context.Context, x ast.Expr, scope *TypeScope)
 			Paradigms:       paradigms,
 			Tags:            nil,
 			Elements:        []*Type{xType},
-			ParadigmsPacked: packed,
+			ParadigmsPacked: nil,
+		}
+		packErr := typ.packParadigms(ctx)
+		if packErr != nil {
+			err = packErr
+			break
 		}
 		break
 	default:
@@ -771,11 +932,6 @@ func (types *Types) parseStructType(ctx context.Context, spec *ast.TypeSpec, sco
 			typ.Elements = append(typ.Elements, ft)
 		}
 	}
-	return
-}
-
-func (types *Types) packedTypeWithParadigms(ctx context.Context, typ *Type, paradigms []*TypeParadigm) (v *Type, err error) {
-
 	return
 }
 
