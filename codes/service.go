@@ -11,6 +11,13 @@ import (
 	"strings"
 )
 
+func NewServiceFile(service *module.Service) (file CodeFile) {
+	file = &ServiceFile{
+		service: service,
+	}
+	return
+}
+
 type ServiceFile struct {
 	service *module.Service
 }
@@ -29,7 +36,6 @@ func (s *ServiceFile) Write(ctx context.Context) (err error) {
 	}
 
 	file := gcg.NewFileWithoutNote(s.service.Path[strings.LastIndex(s.service.Path, "/")+1:])
-
 	file.FileComments("NOTE: this file was been automatically generated, DONT EDIT IT\n")
 
 	packages, importsErr := s.importsCode(ctx)
