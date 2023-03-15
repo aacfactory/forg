@@ -49,6 +49,11 @@ type Function struct {
 	Result          *FunctionField
 }
 
+func (f *Function) HostServiceName() (name string) {
+	name = f.hostServiceName
+	return
+}
+
 func (f *Function) Name() (name string) {
 	name = f.Annotations["fn"]
 	return

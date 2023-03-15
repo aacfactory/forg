@@ -37,7 +37,7 @@ func New(path string) (process *processes.Process, err error) {
 				if err != nil {
 					return
 				}
-				result = fmt.Sprintf("%s: parse succeed", function.Name())
+				result = fmt.Sprintf("%s/%s: parse succeed", function.HostServiceName(), function.Name())
 				return
 			})
 		}
