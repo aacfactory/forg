@@ -65,6 +65,7 @@ func tryLoadService(mod *Module, path string) (service *Service, has bool, err e
 		mod:         mod,
 		Dir:         filepath.Dir(filename),
 		Path:        path,
+		PathIdent:   f.Name.Name,
 		Name:        strings.ToLower(name),
 		Internal:    hasInternal,
 		Title:       title,
@@ -110,6 +111,7 @@ type Service struct {
 	mod         *Module
 	Dir         string
 	Path        string
+	PathIdent   string
 	Name        string
 	Internal    bool
 	Title       string
