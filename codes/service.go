@@ -72,7 +72,7 @@ func (s *ServiceFile) Write(ctx context.Context) (err error) {
 	}
 	file.AddCode(service)
 
-	writer, openErr := os.OpenFile(s.Name(), os.O_TRUNC|os.O_WRONLY, 0600)
+	writer, openErr := os.OpenFile(s.Name(), os.O_TRUNC|os.O_RDWR|os.O_SYNC, 0600)
 	if openErr != nil {
 		err = errors.Warning("forg: code file write failed").
 			WithMeta("kind", "service").WithMeta("service", s.service.Name).WithMeta("file", s.Name()).
@@ -503,7 +503,60 @@ func (s *ServiceFile) serviceDocumentCode(ctx context.Context) (code gcg.Code, e
 			WithCause(ctx.Err())
 		return
 	}
-
-	// 关于element，用到什么就添加什么，且排好序，然后在oas中去重，保持在没有变动的情况下，生成的内容一致。
+	docFnCode := gcg.Func()
+	docFnCode.Receiver("svc", gcg.Star().Ident("_service_"))
+	docFnCode.Name("Document")
+	docFnCode.AddResult("doc", gcg.QualifiedIdent(gcg.NewPackage("github.com/aacfactory/fns/service"), "Document"))
+	body := gcg.Statements()
+	if !s.service.Internal {
+		fnCodes := make([]gcg.Code, 0, 1)
+		for _, function := range s.service.Functions {
+			if function.Internal() {
+				continue
+			}
+			fnCode := gcg.Statements()
+			fnCode.Token("// ").Token(function.Name()).Line()
+			fnCode.Token("document.AddFn(").Line()
+			fnCode.Tab().Token(fmt.Sprintf("\"%s\", \"%s\", \"%s\",%v, %v,", function.Name(), function.Title(), function.Description(), function.Authorization(), function.Deprecated())).Line()
+			if function.Param != nil {
+				paramCode, paramCodeErr := MapTypeToFunctionElementCode(ctx, function.Param.Type)
+				if paramCodeErr != nil {
+					err = errors.Warning("forg: make service document code failed").
+						WithMeta("service", s.service.Name).
+						WithMeta("function", function.Name()).
+						WithCause(paramCodeErr)
+					return
+				}
+				fnCode.Add(paramCode).Symbol(",").Line()
+			} else {
+				fnCode.Tab().Token("nil").Symbol(",").Line()
+			}
+			if function.Result != nil {
+				resultCode, resultCodeErr := MapTypeToFunctionElementCode(ctx, function.Result.Type)
+				if resultCodeErr != nil {
+					err = errors.Warning("forg: make service document code failed").
+						WithMeta("service", s.service.Name).
+						WithMeta("function", function.Name()).
+						WithCause(resultCodeErr)
+					return
+				}
+				fnCode.Add(resultCode).Symbol(",").Line()
+			} else {
+				fnCode.Tab().Token("nil").Symbol(",").Line()
+			}
+			fnCode.Token(")").Line()
+			fnCodes = append(fnCodes, fnCode)
+		}
+		if len(fnCodes) > 0 {
+			body.Token(fmt.Sprintf("document := documents.NewService(_name, \"%s\")", s.service.Description), gcg.NewPackage("github.com/aacfactory/fns/service/documents")).Line()
+			for _, fnCode := range fnCodes {
+				body.Add(fnCode).Line()
+			}
+			body.Token("doc = document").Line()
+		}
+	}
+	body.Return().Line()
+	docFnCode.Body(body)
+	code = docFnCode.Build()
 	return
 }
