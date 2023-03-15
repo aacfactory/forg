@@ -54,8 +54,8 @@ func (f *Function) Name() (name string) {
 	return
 }
 
-func (f *Function) Internal() (ok string) {
-	ok = f.Annotations["internal"]
+func (f *Function) Internal() (ok bool) {
+	_, ok = f.Annotations["internal"]
 	return
 }
 
@@ -114,8 +114,15 @@ func (f *Function) Errors() (errs []FunctionError) {
 	return
 }
 
-func (f *Function) Validation() (ok bool) {
-	_, ok = f.Annotations["validation"]
+func (f *Function) Validation() (title string, ok bool) {
+	title, ok = f.Annotations["validation"]
+	if !ok {
+		return
+	}
+	title = strings.TrimSpace(title)
+	if title == "" {
+		title = "invalid"
+	}
 	return
 }
 
@@ -124,8 +131,20 @@ func (f *Function) Authorization() (ok bool) {
 	return
 }
 
-func (f *Function) Permission() (ok bool) {
-	_, ok = f.Annotations["permission"]
+func (f *Function) Permission() (kind string, ok bool) {
+	kind, ok = f.Annotations["permission"]
+	if !ok {
+		return
+	}
+	kind = strings.TrimSpace(kind)
+	if kind == "" {
+		kind = "github.com/aacfactory/fns/endpoints/rbac"
+		return
+	}
+	if kind == "rbac" {
+		kind = "github.com/aacfactory/fns/endpoints/rbac"
+		return
+	}
 	return
 }
 
