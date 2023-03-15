@@ -13,7 +13,7 @@ import (
 
 func MapTypeToFunctionElementCode(ctx context.Context, typ *module.Type) (code gcg.Code, err error) {
 	if ctx.Err() != nil {
-		err = errors.Warning("forg: mapping type to function document element code, failed").
+		err = errors.Warning("forg: mapping type to function document element code failed").
 			WithMeta("path", typ.Path).WithMeta("name", typ.Name).WithMeta("kind", typ.Kind.String()).
 			WithCause(ctx.Err())
 		return
@@ -56,7 +56,7 @@ func MapTypeToFunctionElementCode(ctx context.Context, typ *module.Type) (code g
 		code, err = mapParadigmElementTypeToFunctionElementCode(ctx, typ)
 		break
 	default:
-		err = errors.Warning("forg: mapping type to function document element code, failed").
+		err = errors.Warning("forg: mapping type to function document element code failed").
 			WithMeta("path", typ.Path).WithMeta("name", typ.Name).WithMeta("kind", typ.Kind.String()).
 			WithCause(errors.Warning("unsupported kind"))
 		break
@@ -66,7 +66,7 @@ func MapTypeToFunctionElementCode(ctx context.Context, typ *module.Type) (code g
 
 func mapBasicTypeToFunctionElementCode(ctx context.Context, typ *module.Type) (code gcg.Code, err error) {
 	if ctx.Err() != nil {
-		err = errors.Warning("forg: mapping basic type to function document element code, failed").
+		err = errors.Warning("forg: mapping basic type to function document element code failed").
 			WithMeta("path", typ.Path).WithMeta("name", typ.Name).WithMeta("kind", typ.Kind.String()).
 			WithCause(ctx.Err())
 		return
@@ -116,7 +116,7 @@ func mapBasicTypeToFunctionElementCode(ctx context.Context, typ *module.Type) (c
 
 func mapBuiltinTypeToFunctionElementCode(ctx context.Context, typ *module.Type) (code gcg.Code, err error) {
 	if ctx.Err() != nil {
-		err = errors.Warning("forg: mapping builtin type to function document element code, failed").
+		err = errors.Warning("forg: mapping builtin type to function document element code failed").
 			WithMeta("path", typ.Path).WithMeta("name", typ.Name).WithMeta("kind", typ.Kind.String()).
 			WithCause(ctx.Err())
 		return
@@ -127,7 +127,7 @@ func mapBuiltinTypeToFunctionElementCode(ctx context.Context, typ *module.Type) 
 
 func mapIdentTypeToFunctionElementCode(ctx context.Context, typ *module.Type) (code gcg.Code, err error) {
 	if ctx.Err() != nil {
-		err = errors.Warning("forg: mapping ident type to function document element code, failed").
+		err = errors.Warning("forg: mapping ident type to function document element code failed").
 			WithMeta("path", typ.Path).WithMeta("name", typ.Name).WithMeta("kind", typ.Kind.String()).
 			WithCause(ctx.Err())
 		return
@@ -148,7 +148,7 @@ func mapIdentTypeToFunctionElementCode(ctx context.Context, typ *module.Type) (c
 
 func mapInterfaceTypeToFunctionElementCode(ctx context.Context, typ *module.Type) (code gcg.Code, err error) {
 	if ctx.Err() != nil {
-		err = errors.Warning("forg: mapping interface type to function document element code, failed").
+		err = errors.Warning("forg: mapping interface type to function document element code failed").
 			WithMeta("path", typ.Path).WithMeta("name", typ.Name).WithMeta("kind", typ.Kind.String()).
 			WithCause(ctx.Err())
 		return
@@ -173,7 +173,7 @@ func mapInterfaceTypeToFunctionElementCode(ctx context.Context, typ *module.Type
 
 func mapPointerTypeToFunctionElementCode(ctx context.Context, typ *module.Type) (code gcg.Code, err error) {
 	if ctx.Err() != nil {
-		err = errors.Warning("forg: mapping pointer type to function document element code, failed").
+		err = errors.Warning("forg: mapping pointer type to function document element code failed").
 			WithMeta("path", typ.Path).WithMeta("name", typ.Name).WithMeta("kind", typ.Kind.String()).
 			WithCause(ctx.Err())
 		return
@@ -184,7 +184,7 @@ func mapPointerTypeToFunctionElementCode(ctx context.Context, typ *module.Type) 
 
 func mapStructTypeToFunctionElementCode(ctx context.Context, typ *module.Type) (code gcg.Code, err error) {
 	if ctx.Err() != nil {
-		err = errors.Warning("forg: mapping struct type to function document element code, failed").
+		err = errors.Warning("forg: mapping struct type to function document element code failed").
 			WithMeta("path", typ.Path).WithMeta("name", typ.Name).WithMeta("kind", typ.Kind.String()).
 			WithCause(ctx.Err())
 		return
@@ -234,7 +234,7 @@ func mapStructTypeToFunctionElementCode(ctx context.Context, typ *module.Type) (
 
 func mapStructFieldTypeToFunctionElementCode(ctx context.Context, typ *module.Type) (code gcg.Code, err error) {
 	if ctx.Err() != nil {
-		err = errors.Warning("forg: mapping struct field type to function document element code, failed").
+		err = errors.Warning("forg: mapping struct field type to function document element code failed").
 			WithMeta("path", typ.Path).WithMeta("name", typ.Name).WithMeta("kind", typ.Kind.String()).
 			WithCause(ctx.Err())
 		return
@@ -321,7 +321,7 @@ func mapStructFieldTypeToFunctionElementCode(ctx context.Context, typ *module.Ty
 
 func mapArrayTypeToFunctionElementCode(ctx context.Context, typ *module.Type) (code gcg.Code, err error) {
 	if ctx.Err() != nil {
-		err = errors.Warning("forg: mapping array type to function document element code, failed").
+		err = errors.Warning("forg: mapping array type to function document element code failed").
 			WithMeta("path", typ.Path).WithMeta("name", typ.Name).WithMeta("kind", typ.Kind.String()).
 			WithCause(ctx.Err())
 		return
@@ -361,7 +361,7 @@ func mapArrayTypeToFunctionElementCode(ctx context.Context, typ *module.Type) (c
 
 func mapMapTypeToFunctionElementCode(ctx context.Context, typ *module.Type) (code gcg.Code, err error) {
 	if ctx.Err() != nil {
-		err = errors.Warning("forg: mapping map type to function document element code, failed").
+		err = errors.Warning("forg: mapping map type to function document element code failed").
 			WithMeta("path", typ.Path).WithMeta("name", typ.Name).WithMeta("kind", typ.Kind.String()).
 			WithCause(ctx.Err())
 		return
@@ -394,7 +394,7 @@ func mapMapTypeToFunctionElementCode(ctx context.Context, typ *module.Type) (cod
 
 func mapAnyTypeToFunctionElementCode(ctx context.Context, typ *module.Type) (code gcg.Code, err error) {
 	if ctx.Err() != nil {
-		err = errors.Warning("forg: mapping any type to function document element code, failed").
+		err = errors.Warning("forg: mapping any type to function document element code failed").
 			WithMeta("path", typ.Path).WithMeta("name", typ.Name).WithMeta("kind", typ.Kind.String()).
 			WithCause(ctx.Err())
 		return
@@ -405,14 +405,14 @@ func mapAnyTypeToFunctionElementCode(ctx context.Context, typ *module.Type) (cod
 
 func mapParadigmTypeToFunctionElementCode(ctx context.Context, typ *module.Type) (code gcg.Code, err error) {
 	if ctx.Err() != nil {
-		err = errors.Warning("forg: mapping paradigm type to function document element code, failed").
+		err = errors.Warning("forg: mapping paradigm type to function document element code failed").
 			WithMeta("path", typ.Path).WithMeta("name", typ.Name).WithMeta("kind", typ.Kind.String()).
 			WithCause(ctx.Err())
 		return
 	}
 	code, err = MapTypeToFunctionElementCode(ctx, typ.ParadigmsPacked)
 	if err != nil {
-		err = errors.Warning("forg: mapping paradigm type to function document element code, failed").
+		err = errors.Warning("forg: mapping paradigm type to function document element code failed").
 			WithMeta("path", typ.Path).WithMeta("name", typ.Name).WithMeta("kind", typ.Kind.String()).
 			WithCause(err)
 		return
@@ -422,14 +422,14 @@ func mapParadigmTypeToFunctionElementCode(ctx context.Context, typ *module.Type)
 
 func mapParadigmElementTypeToFunctionElementCode(ctx context.Context, typ *module.Type) (code gcg.Code, err error) {
 	if ctx.Err() != nil {
-		err = errors.Warning("forg: mapping paradigm element type to function document element code, failed").
+		err = errors.Warning("forg: mapping paradigm element type to function document element code failed").
 			WithMeta("path", typ.Path).WithMeta("name", typ.Name).WithMeta("kind", typ.Kind.String()).
 			WithCause(ctx.Err())
 		return
 	}
 	code, err = MapTypeToFunctionElementCode(ctx, typ.ParadigmsPacked)
 	if err != nil {
-		err = errors.Warning("forg: mapping paradigm element type to function document element code, failed").
+		err = errors.Warning("forg: mapping paradigm element type to function document element code failed").
 			WithMeta("path", typ.Path).WithMeta("name", typ.Name).WithMeta("kind", typ.Kind.String()).
 			WithCause(err)
 		return
