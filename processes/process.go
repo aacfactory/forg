@@ -12,35 +12,51 @@ var (
 
 func New() *Process {
 	return &Process{
-		steps:    make([]Step, 0, 1),
+		units:    0,
+		steps:    make([]*Step, 0, 1),
+		resultCh: make(chan Result, 512),
 		closedCh: make(chan struct{}, 1),
 		cancel:   nil,
 	}
 }
 
 type Process struct {
-	steps    []Step
+	units    int64
+	steps    []*Step
+	resultCh chan Result
 	closedCh chan struct{}
 	cancel   context.CancelFunc
 }
 
-func (p *Process) Add(name string, unit Unit) {
-	no := len(p.steps)
-	p.steps = append(p.steps, Step{
-		No:   no,
-		Name: name,
-		Unit: unit,
+func (p *Process) Add(name string, units ...Unit) {
+	no := int64(len(p.steps) + 1)
+	p.steps = append(p.steps, &Step{
+		no:       no,
+		name:     name,
+		num:      0,
+		units:    units,
+		resultCh: p.resultCh,
 	})
+	for _, step := range p.steps {
+		step.num = no
+	}
+	if units != nil {
+		p.units = p.units + int64(len(units))
+	}
 }
 
-func (p *Process) Len() (n int) {
-	n = len(p.steps)
+func (p *Process) Steps() (n int64) {
+	n = int64(len(p.steps))
+	return
+}
+
+func (p *Process) Units() (n int64) {
+	n = p.units
 	return
 }
 
 func (p *Process) Start(ctx context.Context) (result <-chan Result) {
 	ctx, p.cancel = context.WithCancel(ctx)
-	results := make(chan Result, 512)
 	go func(ctx context.Context, p *Process, result chan Result) {
 		for _, step := range p.steps {
 			stop := false
@@ -48,23 +64,18 @@ func (p *Process) Start(ctx context.Context) (result <-chan Result) {
 			case <-ctx.Done():
 				stop = true
 				result <- Result{
-					No:      step.No,
-					Name:    step.Name,
-					Succeed: false,
-					Result:  nil,
-					Error:   ErrAborted.WithCause(ctx.Err()),
+					StepNo:   0,
+					StepNum:  0,
+					StepName: "",
+					UnitNo:   0,
+					UnitNum:  0,
+					Data:     nil,
+					Error:    ErrAborted.WithCause(ctx.Err()),
 				}
 				p.closedCh <- struct{}{}
 				break
 			default:
-				data, err := step.Unit(ctx)
-				result <- Result{
-					No:      step.No,
-					Name:    step.Name,
-					Succeed: err == nil,
-					Result:  data,
-					Error:   err,
-				}
+				step.Execute(ctx)
 			}
 			if stop {
 				break
@@ -72,8 +83,8 @@ func (p *Process) Start(ctx context.Context) (result <-chan Result) {
 		}
 		close(result)
 		close(p.closedCh)
-	}(ctx, p, results)
-	result = results
+	}(ctx, p, p.resultCh)
+	result = p.resultCh
 	return
 }
 

@@ -53,10 +53,7 @@ func TestNew(t *testing.T) {
 		if !ok {
 			break
 		}
-		fmt.Println("result:", result.No, result.Name, result.Succeed, result.Result, result.Error)
-	}
-	for _, unit := range units {
-		fmt.Println("unit:", unit.no, unit.value)
+		fmt.Println("result:", result.String())
 	}
 }
 
@@ -71,11 +68,11 @@ func TestParallelUnits(t *testing.T) {
 			}
 			subs = append(subs, unit.Execute)
 		}
-		process.Add(fmt.Sprintf("s:%d", i), processes.ParallelUnits(subs...))
+		process.Add(fmt.Sprintf("s:%d", i), subs...)
 	}
 	results := process.Start(context.TODO())
 	go func(process *processes.Process) {
-		time.Sleep(2000 * time.Millisecond)
+		time.Sleep(1000 * time.Millisecond)
 		fmt.Println("abort:", process.Abort(2*time.Second))
 	}(process)
 	for {
@@ -83,6 +80,6 @@ func TestParallelUnits(t *testing.T) {
 		if !ok {
 			break
 		}
-		fmt.Println("result:", result.No, result.Name, result.Succeed, result.Result, result.Error)
+		fmt.Println("result:", result.String())
 	}
 }
