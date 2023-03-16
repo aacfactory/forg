@@ -43,8 +43,8 @@ func New(path string) (process *processes.Process, err error) {
 		}
 		serviceCodeFileUnits = append(serviceCodeFileUnits, codes.Unit(codes.NewServiceFile(service)))
 	}
-	process.Add("services:parsing", functionParseUnits...)
-	process.Add("services:writing", serviceCodeFileUnits...)
-	process.Add("services:deploying", codes.Unit(codes.NewServicesFile(filepath.ToSlash(filepath.Join(mod.Dir, "modules")), services)))
+	process.Add("services: parsing", functionParseUnits...)
+	process.Add("services: writing", serviceCodeFileUnits...)
+	process.Add("deploys : writing", codes.Unit(codes.NewDeploysFile(filepath.ToSlash(filepath.Join(mod.Dir, "modules")), services)))
 	return
 }

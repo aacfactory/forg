@@ -10,31 +10,31 @@ import (
 	"path/filepath"
 )
 
-func NewServicesFile(dir string, services module.Services) (file CodeFile) {
-	file = &ServicesFile{
-		filename: filepath.ToSlash(filepath.Join(dir, "services.go")),
+func NewDeploysFile(dir string, services module.Services) (file CodeFile) {
+	file = &DeploysFile{
+		filename: filepath.ToSlash(filepath.Join(dir, "deploys.go")),
 		services: services,
 	}
 	return
 }
 
-type ServicesFile struct {
+type DeploysFile struct {
 	filename string
 	services module.Services
 }
 
-func (s *ServicesFile) Name() (name string) {
+func (s *DeploysFile) Name() (name string) {
 	name = s.filename
 	return
 }
 
-func (s *ServicesFile) Write(ctx context.Context) (err error) {
+func (s *DeploysFile) Write(ctx context.Context) (err error) {
 	if s.filename == "" {
 		return
 	}
 	if ctx.Err() != nil {
-		err = errors.Warning("forg: services write failed").
-			WithMeta("services", s.Name()).
+		err = errors.Warning("forg: deploys write failed").
+			WithMeta("deploys", s.Name()).
 			WithCause(ctx.Err())
 		return
 	}
@@ -43,7 +43,7 @@ func (s *ServicesFile) Write(ctx context.Context) (err error) {
 	file.FileComments("NOTE: this file was been automatically generated, DONT EDIT IT\n")
 
 	fn := gcg.Func()
-	fn.Name("services")
+	fn.Name("deploys")
 	fn.AddResult("v", gcg.Token("[]service.Service", gcg.NewPackage("github.com/aacfactory/fns/service")))
 	body := gcg.Statements()
 	if s.services != nil && s.services.Len() > 0 {
@@ -60,16 +60,16 @@ func (s *ServicesFile) Write(ctx context.Context) (err error) {
 
 	writer, openErr := os.OpenFile(s.Name(), os.O_TRUNC|os.O_RDWR|os.O_SYNC, 0600)
 	if openErr != nil {
-		err = errors.Warning("forg: code file write failed").
-			WithMeta("kind", "services").WithMeta("file", s.Name()).
+		err = errors.Warning("forg: deploys code file write failed").
+			WithMeta("kind", "deploys").WithMeta("file", s.Name()).
 			WithCause(openErr)
 		return
 	}
 	renderErr := file.Render(writer)
 	if renderErr != nil {
 		_ = writer.Close()
-		err = errors.Warning("forg: code file write failed").
-			WithMeta("kind", "services").WithMeta("file", s.Name()).
+		err = errors.Warning("forg: deploys code file write failed").
+			WithMeta("deploys", s.Name()).
 			WithCause(renderErr)
 		return
 	}
