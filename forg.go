@@ -11,7 +11,7 @@ import (
 	"strings"
 )
 
-func New(path string) (process *processes.Process, err error) {
+func New(path string) (controller processes.ProcessController, err error) {
 	path = strings.TrimSpace(path)
 	if path == "" {
 		err = errors.Warning("forg: new failed").WithCause(errors.Warning("forg: path is required"))
@@ -27,7 +27,7 @@ func New(path string) (process *processes.Process, err error) {
 		err = errors.Warning("forg: new failed").WithCause(servicesErr)
 		return
 	}
-	process = processes.New()
+	process := processes.New()
 	functionParseUnits := make([]processes.Unit, 0, 1)
 	serviceCodeFileUnits := make([]processes.Unit, 0, 1)
 	for _, service := range services {
@@ -46,5 +46,6 @@ func New(path string) (process *processes.Process, err error) {
 	process.Add("services: parsing", functionParseUnits...)
 	process.Add("services: writing", serviceCodeFileUnits...)
 	process.Add("deploys : writing", codes.Unit(codes.NewDeploysFile(filepath.ToSlash(filepath.Join(mod.Dir, "modules")), services)))
+	controller = process
 	return
 }

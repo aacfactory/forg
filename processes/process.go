@@ -20,6 +20,13 @@ func New() *Process {
 	}
 }
 
+type ProcessController interface {
+	Steps() (n int64)
+	Units() (n int64)
+	Start(ctx context.Context) (results <-chan Result)
+	Abort(timeout time.Duration) (err error)
+}
+
 type Process struct {
 	units    int64
 	steps    []*Step
@@ -55,7 +62,7 @@ func (p *Process) Units() (n int64) {
 	return
 }
 
-func (p *Process) Start(ctx context.Context) (result <-chan Result) {
+func (p *Process) Start(ctx context.Context) (results <-chan Result) {
 	ctx, p.cancel = context.WithCancel(ctx)
 	go func(ctx context.Context, p *Process, result chan Result) {
 		for _, step := range p.steps {
@@ -89,7 +96,7 @@ func (p *Process) Start(ctx context.Context) (result <-chan Result) {
 		close(result)
 		close(p.closedCh)
 	}(ctx, p, p.resultCh)
-	result = p.resultCh
+	results = p.resultCh
 	return
 }
 
