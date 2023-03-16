@@ -72,7 +72,7 @@ func TestParallelUnits(t *testing.T) {
 	}
 	results := process.Start(context.TODO())
 	go func(process *processes.Process) {
-		time.Sleep(1000 * time.Millisecond)
+		time.Sleep(1100 * time.Millisecond)
 		fmt.Println("abort:", process.Abort(2*time.Second))
 	}(process)
 	for {

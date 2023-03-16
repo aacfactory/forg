@@ -62,7 +62,6 @@ func (p *Process) Start(ctx context.Context) (result <-chan Result) {
 			stop := false
 			select {
 			case <-ctx.Done():
-				stop = true
 				result <- Result{
 					StepNo:   0,
 					StepNum:  0,
@@ -72,10 +71,16 @@ func (p *Process) Start(ctx context.Context) (result <-chan Result) {
 					Data:     nil,
 					Error:    ErrAborted.WithCause(ctx.Err()),
 				}
+				stop = true
 				p.closedCh <- struct{}{}
 				break
 			default:
-				step.Execute(ctx)
+				err := step.Execute(ctx)
+				if err != nil {
+					stop = true
+					p.closedCh <- struct{}{}
+				}
+				break
 			}
 			if stop {
 				break
@@ -100,5 +105,10 @@ func (p *Process) Abort(timeout time.Duration) (err error) {
 	case <-p.closedCh:
 		break
 	}
+	return
+}
+
+func IsAbortErr(err error) (ok bool) {
+	ok = errors.Map(err).Contains(ErrAborted) || errors.Map(err).Contains(context.Canceled)
 	return
 }

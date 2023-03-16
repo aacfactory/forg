@@ -22,7 +22,7 @@ type Result struct {
 func (result Result) String() string {
 	status := "√"
 	if result.Error != nil {
-		if errors.Map(result.Error).Contains(ErrAborted) {
+		if IsAbortErr(result.Error) {
 			status = "aborted"
 		} else {
 			status = "x"
@@ -39,8 +39,9 @@ type Step struct {
 	resultCh chan<- Result
 }
 
-func (step *Step) Execute(ctx context.Context) {
+func (step *Step) Execute(ctx context.Context) (err error) {
 	if ctx.Err() != nil {
+		err = ctx.Err()
 		return
 	}
 	if step.units == nil || len(step.units) == 0 {
@@ -68,7 +69,7 @@ func (step *Step) Execute(ctx context.Context) {
 			if ctx.Err() != nil {
 				return
 			}
-			data, err := unit(ctx)
+			data, unitErr := unit(ctx)
 			defer func() {
 				_ = recover()
 			}()
@@ -79,9 +80,10 @@ func (step *Step) Execute(ctx context.Context) {
 				UnitNo:   unitNo,
 				UnitNum:  unitNum,
 				Data:     data,
-				Error:    err,
+				Error:    unitErr,
 			}
 		}(ctx, &wg, unitNo, unit, step)
 	}
 	wg.Wait()
+	return
 }
