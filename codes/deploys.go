@@ -1,6 +1,7 @@
 package codes
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"github.com/aacfactory/errors"
@@ -58,6 +59,16 @@ func (s *DeploysFile) Write(ctx context.Context) (err error) {
 	fn.Body(body)
 	file.AddCode(fn.Build())
 
+	buf := bytes.NewBuffer([]byte{})
+
+	renderErr := file.Render(buf)
+	if renderErr != nil {
+		err = errors.Warning("forg: deploys code file write failed").
+			WithMeta("deploys", s.Name()).
+			WithCause(renderErr)
+		return
+	}
+
 	writer, openErr := os.OpenFile(s.Name(), os.O_TRUNC|os.O_RDWR|os.O_SYNC, 0600)
 	if openErr != nil {
 		err = errors.Warning("forg: deploys code file write failed").
@@ -65,14 +76,33 @@ func (s *DeploysFile) Write(ctx context.Context) (err error) {
 			WithCause(openErr)
 		return
 	}
-	renderErr := file.Render(writer)
-	if renderErr != nil {
-		_ = writer.Close()
+
+	n := 0
+	bodyLen := buf.Len()
+	content := buf.Bytes()
+	for n < bodyLen {
+		nn, writeErr := writer.Write(content[n:])
+		if writeErr != nil {
+			err = errors.Warning("forg: deploys code file write failed").
+				WithMeta("kind", "deploys").WithMeta("file", s.Name()).
+				WithCause(writeErr)
+			return
+		}
+		n += nn
+	}
+	syncErr := writer.Sync()
+	if syncErr != nil {
 		err = errors.Warning("forg: deploys code file write failed").
-			WithMeta("deploys", s.Name()).
-			WithCause(renderErr)
+			WithMeta("kind", "deploys").WithMeta("file", s.Name()).
+			WithCause(syncErr)
 		return
 	}
-	_ = writer.Close()
+	closeErr := writer.Close()
+	if closeErr != nil {
+		err = errors.Warning("forg: deploys code file write failed").
+			WithMeta("kind", "deploys").WithMeta("file", s.Name()).
+			WithCause(closeErr)
+		return
+	}
 	return
 }

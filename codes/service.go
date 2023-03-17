@@ -1,6 +1,7 @@
 package codes
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"github.com/aacfactory/errors"
@@ -78,6 +79,15 @@ func (s *ServiceFile) Write(ctx context.Context) (err error) {
 	}
 	file.AddCode(service)
 
+	buf := bytes.NewBuffer([]byte{})
+
+	renderErr := file.Render(buf)
+	if renderErr != nil {
+		err = errors.Warning("forg: code file write failed").
+			WithMeta("kind", "service").WithMeta("service", s.service.Name).WithMeta("file", s.Name()).
+			WithCause(renderErr)
+		return
+	}
 	writer, openErr := os.OpenFile(s.Name(), os.O_CREATE|os.O_TRUNC|os.O_RDWR|os.O_SYNC, 0600)
 	if openErr != nil {
 		err = errors.Warning("forg: code file write failed").
@@ -85,15 +95,33 @@ func (s *ServiceFile) Write(ctx context.Context) (err error) {
 			WithCause(openErr)
 		return
 	}
-	renderErr := file.Render(writer)
-	if renderErr != nil {
-		_ = writer.Close()
+	n := 0
+	bodyLen := buf.Len()
+	body := buf.Bytes()
+	for n < bodyLen {
+		nn, writeErr := writer.Write(body[n:])
+		if writeErr != nil {
+			err = errors.Warning("forg: code file write failed").
+				WithMeta("kind", "service").WithMeta("service", s.service.Name).WithMeta("file", s.Name()).
+				WithCause(writeErr)
+			return
+		}
+		n += nn
+	}
+	syncErr := writer.Sync()
+	if syncErr != nil {
 		err = errors.Warning("forg: code file write failed").
 			WithMeta("kind", "service").WithMeta("service", s.service.Name).WithMeta("file", s.Name()).
-			WithCause(renderErr)
+			WithCause(syncErr)
 		return
 	}
-	_ = writer.Close()
+	closeErr := writer.Close()
+	if closeErr != nil {
+		err = errors.Warning("forg: code file write failed").
+			WithMeta("kind", "service").WithMeta("service", s.service.Name).WithMeta("file", s.Name()).
+			WithCause(closeErr)
+		return
+	}
 	return
 }
 
