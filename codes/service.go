@@ -278,15 +278,6 @@ func (s *ServiceFile) serviceInstanceCode(ctx context.Context) (code gcg.Code, e
 	instance.Name("Service")
 	instance.AddResult("v", gcg.Token("service.Service"))
 	body := gcg.Statements()
-	body.Tab().Token("components := []service.Component{")
-	if s.service.Components != nil && s.service.Components.Len() > 0 {
-		path := fmt.Sprintf("%s/components", s.service.Path)
-		for _, component := range s.service.Components {
-			componentCode := gcg.QualifiedIdent(gcg.NewPackage(path), component.Indent)
-			body.Line().Tab().Tab().Add(componentCode).Token("{}").Symbol(",")
-		}
-	}
-	body.Symbol("}").Line()
 	body.Tab().Token("v = &_service_{").Line()
 	body.Tab().Tab().Token("Abstract: service.NewAbstract(").Line()
 	body.Tab().Tab().Tab().Token("_name,").Line()
@@ -295,7 +286,15 @@ func (s *ServiceFile) serviceInstanceCode(ctx context.Context) (code gcg.Code, e
 	} else {
 		body.Tab().Tab().Tab().Token("false,").Line()
 	}
-	body.Tab().Tab().Tab().Token("components...,").Line()
+	if s.service.Components != nil && s.service.Components.Len() > 0 {
+		body.Tab().Tab().Tab().Token("[]service.Component{").Line()
+		path := fmt.Sprintf("%s/components", s.service.Path)
+		for _, component := range s.service.Components {
+			componentCode := gcg.QualifiedIdent(gcg.NewPackage(path), component.Indent)
+			body.Tab().Tab().Token("&").Add(componentCode).Token("{}").Symbol(",").Line()
+		}
+		body.Tab().Tab().Tab().Token("}...,").Line()
+	}
 	body.Tab().Tab().Symbol(")").Symbol(",").Line()
 	body.Tab().Symbol("}").Line()
 	body.Tab().Return()
@@ -399,6 +398,7 @@ func (s *ServiceFile) serviceHandleCode(ctx context.Context) (code gcg.Code, err
 						param = gcg.QualifiedIdent(gcg.NewPackageWithAlias(pkg.Path, pkg.Alias), function.Param.Type.Name)
 					}
 				}
+				functionCode.Token("// param").Line()
 				functionCode.Token("param := ").Add(param).Token("{}").Line()
 				functionCode.Token("paramErr := argument.As(&param)").Line()
 				functionCode.Token("if paramErr != nil {").Line()
@@ -424,6 +424,7 @@ func (s *ServiceFile) serviceHandleCode(ctx context.Context) (code gcg.Code, err
 				return
 			}
 			if hasTimeout {
+				functionCode.Token("// make timeout context").Line()
 				functionCode.Token("var cancel context.CancelFunc = nil").Line()
 				functionCode.Token(fmt.Sprintf("ctx, cancel = context.WithTimeout(ctx, time.Duration(%d))", int64(timeout))).Line()
 			}
@@ -485,7 +486,8 @@ func (s *ServiceFile) serviceHandleCode(ctx context.Context) (code gcg.Code, err
 				functionCode.Add(functionExecCode)
 			}
 			if hasTimeout {
-				functionCode.Token("cancel()")
+				functionCode.Token("// cancel timeout context").Line()
+				functionCode.Token("cancel()").Line()
 			}
 			functionCode.Break()
 			fnSwitchCode.Case(gcg.Ident(function.ConstIdent), functionCode)
