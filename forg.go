@@ -45,7 +45,7 @@ func New(path string) (controller processes.ProcessController, err error) {
 	}
 	process.Add("services: parsing", functionParseUnits...)
 	process.Add("services: writing", serviceCodeFileUnits...)
-	process.Add("deploys : writing", codes.Unit(codes.NewDeploysFile(filepath.ToSlash(filepath.Join(mod.Dir, "modules")), services)))
+	process.Add("services : writing", codes.Unit(codes.NewDeploysFile(filepath.ToSlash(filepath.Join(mod.Dir, "modules")), services)))
 	controller = process
 	return
 }

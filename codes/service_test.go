@@ -38,4 +38,11 @@ func TestNewServiceFile(t *testing.T) {
 			return
 		}
 	}
+
+	deploys := codes.NewDeploysFile(`D:\studio\workspace\go\src\github.com\aacfactory\fns-example\standalone\modules`, services)
+	writeErr := deploys.Write(ctx)
+	if writeErr != nil {
+		t.Errorf("%+v", writeErr)
+		return
+	}
 }

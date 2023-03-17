@@ -31,13 +31,13 @@ func (s *ServiceFile) Name() (name string) {
 func (s *ServiceFile) Write(ctx context.Context) (err error) {
 	if ctx.Err() != nil {
 		err = errors.Warning("forg: service write failed").
-			WithMeta("service", s.service.Name).
+			WithMeta("kind", "service").WithMeta("service", s.service.Name).
 			WithCause(ctx.Err())
 		return
 	}
 
 	file := gcg.NewFileWithoutNote(s.service.Path[strings.LastIndex(s.service.Path, "/")+1:])
-	file.FileComments("NOTE: this file was been automatically generated, DONT EDIT IT\n")
+	file.FileComments("NOTE: this file has been automatically generated, DON'T EDIT IT!!!\n")
 
 	packages, importsErr := s.importsCode(ctx)
 	if importsErr != nil {
@@ -128,7 +128,7 @@ func (s *ServiceFile) Write(ctx context.Context) (err error) {
 func (s *ServiceFile) importsCode(ctx context.Context) (packages []*gcg.Package, err error) {
 	if ctx.Err() != nil {
 		err = errors.Warning("forg: service write failed").
-			WithMeta("service", s.service.Name).
+			WithMeta("kind", "service").WithMeta("service", s.service.Name).WithMeta("file", s.Name()).
 			WithCause(ctx.Err())
 		return
 	}
@@ -146,7 +146,7 @@ func (s *ServiceFile) importsCode(ctx context.Context) (packages []*gcg.Package,
 func (s *ServiceFile) constFunctionNamesCode(ctx context.Context) (code gcg.Code, err error) {
 	if ctx.Err() != nil {
 		err = errors.Warning("forg: service write failed").
-			WithMeta("service", s.service.Name).
+			WithMeta("kind", "service").WithMeta("service", s.service.Name).WithMeta("file", s.Name()).
 			WithCause(ctx.Err())
 		return
 	}
@@ -162,7 +162,7 @@ func (s *ServiceFile) constFunctionNamesCode(ctx context.Context) (code gcg.Code
 func (s *ServiceFile) proxyFunctionsCode(ctx context.Context) (code gcg.Code, err error) {
 	if ctx.Err() != nil {
 		err = errors.Warning("forg: service write failed").
-			WithMeta("service", s.service.Name).
+			WithMeta("kind", "service").WithMeta("service", s.service.Name).WithMeta("file", s.Name()).
 			WithCause(ctx.Err())
 		return
 	}
@@ -181,7 +181,7 @@ func (s *ServiceFile) proxyFunctionsCode(ctx context.Context) (code gcg.Code, er
 				pkg, hasPKG := s.service.Imports.Path(function.Param.Type.Path)
 				if !hasPKG {
 					err = errors.Warning("forg: make function proxy code failed").
-						WithMeta("service", s.service.Name).
+						WithMeta("kind", "service").WithMeta("service", s.service.Name).WithMeta("file", s.Name()).
 						WithMeta("function", function.Name()).
 						WithCause(errors.Warning("import of param was not found").WithMeta("path", function.Param.Type.Path))
 					return
@@ -202,7 +202,7 @@ func (s *ServiceFile) proxyFunctionsCode(ctx context.Context) (code gcg.Code, er
 				pkg, hasPKG := s.service.Imports.Path(function.Result.Type.Path)
 				if !hasPKG {
 					err = errors.Warning("forg: make function proxy code failed").
-						WithMeta("service", s.service.Name).
+						WithMeta("kind", "service").WithMeta("service", s.service.Name).WithMeta("file", s.Name()).
 						WithMeta("function", function.Name()).
 						WithCause(errors.Warning("import of result was not found").WithMeta("path", function.Result.Type.Path))
 					return
@@ -258,7 +258,7 @@ func (s *ServiceFile) proxyFunctionsCode(ctx context.Context) (code gcg.Code, er
 func (s *ServiceFile) serviceCode(ctx context.Context) (code gcg.Code, err error) {
 	if ctx.Err() != nil {
 		err = errors.Warning("forg: service write failed").
-			WithMeta("service", s.service.Name).
+			WithMeta("kind", "service").WithMeta("service", s.service.Name).WithMeta("file", s.Name()).
 			WithCause(ctx.Err())
 		return
 	}
@@ -298,7 +298,7 @@ func (s *ServiceFile) serviceCode(ctx context.Context) (code gcg.Code, err error
 func (s *ServiceFile) serviceInstanceCode(ctx context.Context) (code gcg.Code, err error) {
 	if ctx.Err() != nil {
 		err = errors.Warning("forg: service write failed").
-			WithMeta("service", s.service.Name).
+			WithMeta("kind", "service").WithMeta("service", s.service.Name).WithMeta("file", s.Name()).
 			WithCause(ctx.Err())
 		return
 	}
@@ -335,7 +335,7 @@ func (s *ServiceFile) serviceInstanceCode(ctx context.Context) (code gcg.Code, e
 func (s *ServiceFile) serviceTypeCode(ctx context.Context) (code gcg.Code, err error) {
 	if ctx.Err() != nil {
 		err = errors.Warning("forg: service write failed").
-			WithMeta("service", s.service.Name).
+			WithMeta("kind", "service").WithMeta("service", s.service.Name).WithMeta("file", s.Name()).
 			WithCause(ctx.Err())
 		return
 	}
@@ -350,7 +350,7 @@ func (s *ServiceFile) serviceTypeCode(ctx context.Context) (code gcg.Code, err e
 func (s *ServiceFile) serviceHandleCode(ctx context.Context) (code gcg.Code, err error) {
 	if ctx.Err() != nil {
 		err = errors.Warning("forg: service write failed").
-			WithMeta("service", s.service.Name).
+			WithMeta("kind", "service").WithMeta("service", s.service.Name).WithMeta("file", s.Name()).
 			WithCause(ctx.Err())
 		return
 	}
@@ -391,7 +391,7 @@ func (s *ServiceFile) serviceHandleCode(ctx context.Context) (code gcg.Code, err
 				idx := strings.LastIndex(kind, "/")
 				if idx < 0 || idx == len(kind)-1 {
 					err = errors.Warning("forg: kind of function is invalid").
-						WithMeta("service", s.service.Name).
+						WithMeta("kind", "service").WithMeta("service", s.service.Name).WithMeta("file", s.Name()).
 						WithMeta("function", function.Name())
 					return
 				}
@@ -415,7 +415,7 @@ func (s *ServiceFile) serviceHandleCode(ctx context.Context) (code gcg.Code, err
 					pkg, hasPKG := s.service.Imports.Path(function.Param.Type.Path)
 					if !hasPKG {
 						err = errors.Warning("forg: make service handle function code failed").
-							WithMeta("service", s.service.Name).
+							WithMeta("kind", "service").WithMeta("service", s.service.Name).WithMeta("file", s.Name()).
 							WithMeta("function", function.Name()).
 							WithCause(errors.Warning("import of param was not found").WithMeta("path", function.Param.Type.Path))
 						return
@@ -446,7 +446,7 @@ func (s *ServiceFile) serviceHandleCode(ctx context.Context) (code gcg.Code, err
 			if timeoutErr != nil {
 				timeoutValue := function.Annotations["timeout"]
 				err = errors.Warning("forg: make service handle function code failed").
-					WithMeta("service", s.service.Name).
+					WithMeta("kind", "service").WithMeta("service", s.service.Name).WithMeta("file", s.Name()).
 					WithMeta("function", function.Name()).
 					WithCause(errors.Warning("value of @timeout is invalid").WithMeta("timeout", timeoutValue).WithCause(timeoutErr))
 				return
@@ -463,7 +463,7 @@ func (s *ServiceFile) serviceHandleCode(ctx context.Context) (code gcg.Code, err
 				db = strings.TrimSpace(db)
 				if db == "" {
 					err = errors.Warning("forg: make service handle function code failed").
-						WithMeta("service", s.service.Name).
+						WithMeta("kind", "service").WithMeta("service", s.service.Name).WithMeta("file", s.Name()).
 						WithMeta("function", function.Name()).
 						WithCause(errors.Warning("value of @sql is required"))
 					return
@@ -535,7 +535,7 @@ func (s *ServiceFile) serviceHandleCode(ctx context.Context) (code gcg.Code, err
 func (s *ServiceFile) serviceDocumentCode(ctx context.Context) (code gcg.Code, err error) {
 	if ctx.Err() != nil {
 		err = errors.Warning("forg: service write failed").
-			WithMeta("service", s.service.Name).
+			WithMeta("kind", "service").WithMeta("service", s.service.Name).WithMeta("file", s.Name()).
 			WithCause(ctx.Err())
 		return
 	}
@@ -558,7 +558,7 @@ func (s *ServiceFile) serviceDocumentCode(ctx context.Context) (code gcg.Code, e
 				paramCode, paramCodeErr := MapTypeToFunctionElementCode(ctx, function.Param.Type)
 				if paramCodeErr != nil {
 					err = errors.Warning("forg: make service document code failed").
-						WithMeta("service", s.service.Name).
+						WithMeta("kind", "service").WithMeta("service", s.service.Name).WithMeta("file", s.Name()).
 						WithMeta("function", function.Name()).
 						WithCause(paramCodeErr)
 					return
@@ -571,7 +571,7 @@ func (s *ServiceFile) serviceDocumentCode(ctx context.Context) (code gcg.Code, e
 				resultCode, resultCodeErr := MapTypeToFunctionElementCode(ctx, function.Result.Type)
 				if resultCodeErr != nil {
 					err = errors.Warning("forg: make service document code failed").
-						WithMeta("service", s.service.Name).
+						WithMeta("kind", "service").WithMeta("service", s.service.Name).WithMeta("file", s.Name()).
 						WithMeta("function", function.Name()).
 						WithCause(resultCodeErr)
 					return
