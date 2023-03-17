@@ -410,11 +410,25 @@ func (types *Types) parseType(ctx context.Context, spec *ast.TypeSpec, scope *Ty
 					WithCause(parseIdentTypeErr)
 				break
 			}
+			// annotations
+			doc := ""
+			if spec.Doc != nil && spec.Doc.Text() != "" {
+				doc = spec.Doc.Text()
+			} else {
+				doc = scope.GenericDoc
+			}
+			annotations, parseAnnotationsErr := ParseAnnotations(doc)
+			if parseAnnotationsErr != nil {
+				err = errors.Warning("forg: parse ident type failed").
+					WithMeta("path", path).WithMeta("name", name).
+					WithCause(parseAnnotationsErr)
+				return
+			}
 			result = &Type{
 				Kind:        IdentKind,
 				Path:        path,
 				Name:        name,
-				Annotations: nil,
+				Annotations: annotations,
 				Paradigms:   nil,
 				Tags:        nil,
 				Elements:    []*Type{identType},
@@ -424,11 +438,25 @@ func (types *Types) parseType(ctx context.Context, spec *ast.TypeSpec, scope *Ty
 			result, err = types.parseStructType(ctx, spec, scope)
 			break
 		case *ast.InterfaceType:
+			// annotations
+			doc := ""
+			if spec.Doc != nil && spec.Doc.Text() != "" {
+				doc = spec.Doc.Text()
+			} else {
+				doc = scope.GenericDoc
+			}
+			annotations, parseAnnotationsErr := ParseAnnotations(doc)
+			if parseAnnotationsErr != nil {
+				err = errors.Warning("forg: parse interface type failed").
+					WithMeta("path", path).WithMeta("name", name).
+					WithCause(parseAnnotationsErr)
+				return
+			}
 			result = &Type{
 				Kind:        InterfaceKind,
 				Path:        path,
 				Name:        name,
-				Annotations: nil,
+				Annotations: annotations,
 				Paradigms:   nil,
 				Tags:        nil,
 				Elements:    nil,
@@ -436,18 +464,32 @@ func (types *Types) parseType(ctx context.Context, spec *ast.TypeSpec, scope *Ty
 			break
 		case *ast.ArrayType:
 			arrayType := spec.Type.(*ast.ArrayType)
-			arrayElementType, parseArrayElementTypeErr := types.parseExpr(ctx, arrayType, scope)
+			arrayElementType, parseArrayElementTypeErr := types.parseExpr(ctx, arrayType.Elt, scope)
 			if parseArrayElementTypeErr != nil {
 				err = errors.Warning("forg: parse array type spec failed").
 					WithMeta("path", path).WithMeta("name", name).
 					WithCause(parseArrayElementTypeErr)
 				break
 			}
+			// annotations
+			doc := ""
+			if spec.Doc != nil && spec.Doc.Text() != "" {
+				doc = spec.Doc.Text()
+			} else {
+				doc = scope.GenericDoc
+			}
+			annotations, parseAnnotationsErr := ParseAnnotations(doc)
+			if parseAnnotationsErr != nil {
+				err = errors.Warning("forg: parse array type failed").
+					WithMeta("path", path).WithMeta("name", name).
+					WithCause(parseAnnotationsErr)
+				return
+			}
 			result = &Type{
 				Kind:        ArrayKind,
 				Path:        path,
 				Name:        name,
-				Annotations: nil,
+				Annotations: annotations,
 				Paradigms:   nil,
 				Tags:        nil,
 				Elements:    []*Type{arrayElementType},
@@ -457,29 +499,43 @@ func (types *Types) parseType(ctx context.Context, spec *ast.TypeSpec, scope *Ty
 			mapType := spec.Type.(*ast.MapType)
 			keyElement, parseKeyErr := types.parseExpr(ctx, mapType.Key, scope)
 			if parseKeyErr != nil {
-				err = errors.Warning("forg: parse array type spec failed").
+				err = errors.Warning("forg: parse map type spec failed").
 					WithMeta("path", path).WithMeta("name", name).
 					WithCause(parseKeyErr)
 				break
 			}
 			if _, basic := keyElement.Basic(); !basic {
-				err = errors.Warning("forg: parse array type spec failed").
+				err = errors.Warning("forg: parse map type spec failed").
 					WithMeta("path", path).WithMeta("name", name).
 					WithCause(errors.Warning("forg: key kind of map kind field must be basic"))
 				break
 			}
 			valueElement, parseValueErr := types.parseExpr(ctx, mapType.Value, scope)
 			if parseValueErr != nil {
-				err = errors.Warning("forg: parse array type spec failed").
+				err = errors.Warning("forg: parse map type spec failed").
 					WithMeta("path", path).WithMeta("name", name).
 					WithCause(parseValueErr)
 				break
+			}
+			// annotations
+			doc := ""
+			if spec.Doc != nil && spec.Doc.Text() != "" {
+				doc = spec.Doc.Text()
+			} else {
+				doc = scope.GenericDoc
+			}
+			annotations, parseAnnotationsErr := ParseAnnotations(doc)
+			if parseAnnotationsErr != nil {
+				err = errors.Warning("forg: parse map type failed").
+					WithMeta("path", path).WithMeta("name", name).
+					WithCause(parseAnnotationsErr)
+				return
 			}
 			result = &Type{
 				Kind:        MapKind,
 				Path:        path,
 				Name:        name,
-				Annotations: nil,
+				Annotations: annotations,
 				Paradigms:   nil,
 				Tags:        nil,
 				Elements:    []*Type{keyElement, valueElement},
