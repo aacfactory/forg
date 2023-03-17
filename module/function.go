@@ -85,7 +85,10 @@ func (f *Function) Errors() (errs []FunctionError) {
 		return
 	}
 	reader := bufio.NewReader(bytes.NewReader([]byte(p)))
-	current := FunctionError{}
+	current := FunctionError{
+		Name:         "",
+		Descriptions: make(map[string]string),
+	}
 	for {
 		line, _, readErr := reader.ReadLine()
 		if readErr == io.EOF {
@@ -96,12 +99,14 @@ func (f *Function) Errors() (errs []FunctionError) {
 			if current.Name != "" {
 				errs = append(errs, current)
 			}
-			current.Name = string(bytes.TrimSpace(line[px+1:]))
-			current.Descriptions = make(map[string]string)
+			current = FunctionError{
+				Name:         string(bytes.TrimSpace(line[px+1:])),
+				Descriptions: make(map[string]string),
+			}
 			continue
 		}
 		dx := bytes.IndexByte(line, '-')
-		if dx > 0 {
+		if dx >= 0 {
 			description := bytes.TrimSpace(line[dx+1:])
 			idx := bytes.IndexByte(description, ':')
 			if idx < 0 {
