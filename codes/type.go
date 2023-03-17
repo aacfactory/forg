@@ -380,6 +380,10 @@ func mapMapTypeToFunctionElementCode(ctx context.Context, typ *module.Type) (cod
 	}
 	stmt := gcg.Statements()
 	stmt = stmt.Token("documents.Map(").Add(elementCode).Symbol(")")
+	if typ.Path != "" && typ.Name != "" {
+		stmt = stmt.Dot().Line().Token(fmt.Sprintf("SetPath(\"%s\")", typ.Path))
+		stmt = stmt.Dot().Line().Token(fmt.Sprintf("SetName(\"%s\")", typ.Name))
+	}
 	title, hasTitle := typ.Annotations.Get("title")
 	if hasTitle {
 		stmt = stmt.Dot().Line().Token("SetTitle(").Token(fmt.Sprintf("\"%s\"", title)).Symbol(")")
