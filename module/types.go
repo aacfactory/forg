@@ -135,7 +135,7 @@ func (typ *Type) Key() (key string) {
 }
 
 func formatTypeKey(path string, name string) (key string) {
-	key = fmt.Sprintf("%s:%s", path, name)
+	key = fmt.Sprintf("%s.%s", path, name)
 	return
 }
 
@@ -338,13 +338,17 @@ func (typ *Type) packParadigms(ctx context.Context) (err error) {
 			err = errors.Warning("forg: there is no packing in context")
 			break
 		}
+		packed := false
 		for _, paradigm := range topParadigms {
 			if paradigm.Name == typ.Name {
 				typ.ParadigmsPacked = paradigm.Types[0]
+				packed = true
 				break
 			}
 		}
-		err = errors.Warning("forg: pack missed")
+		if !packed {
+			err = errors.Warning("forg: pack missed")
+		}
 		break
 	default:
 		break
@@ -541,8 +545,35 @@ func (types *Types) parseType(ctx context.Context, spec *ast.TypeSpec, scope *Ty
 				Elements:    []*Type{keyElement, valueElement},
 			}
 			break
+		case *ast.IndexExpr, *ast.IndexListExpr:
+			result, err = types.parseExpr(ctx, spec.Type, scope)
+			if err != nil {
+				break
+			}
+			result.Path = path
+			result.Name = name
+			if result.ParadigmsPacked != nil {
+				result.ParadigmsPacked.Path = path
+				result.ParadigmsPacked.Name = name
+			}
+			// annotations
+			doc := ""
+			if spec.Doc != nil && spec.Doc.Text() != "" {
+				doc = spec.Doc.Text()
+			} else {
+				doc = scope.GenericDoc
+			}
+			annotations, parseAnnotationsErr := ParseAnnotations(doc)
+			if parseAnnotationsErr != nil {
+				err = errors.Warning("forg: parse map type failed").
+					WithMeta("path", path).WithMeta("name", name).
+					WithCause(parseAnnotationsErr)
+				return
+			}
+			result.Annotations = annotations
+			break
 		default:
-			err = errors.Warning("forg: unsupported type spec").WithMeta("path", path).WithMeta("name", name)
+			err = errors.Warning("forg: unsupported type spec").WithMeta("path", path).WithMeta("name", name).WithMeta("type", reflect.TypeOf(spec.Type).String())
 			break
 		}
 		if err != nil {
@@ -799,6 +830,13 @@ func (types *Types) parseExpr(ctx context.Context, x ast.Expr, scope *TypeScope)
 			err = parseXErr
 			break
 		}
+		if xType.Paradigms == nil || len(xType.Paradigms) != len(paradigms) {
+			err = errors.Warning("forg: parse index expr failed").WithCause(errors.Warning("forg: invalid paradigms in x type"))
+			return
+		}
+		for i, paradigm := range xType.Paradigms {
+			paradigms[i].Name = paradigm.Name
+		}
 		typ = &Type{
 			Kind:            ParadigmKind,
 			Path:            "",
@@ -837,6 +875,13 @@ func (types *Types) parseExpr(ctx context.Context, x ast.Expr, scope *TypeScope)
 		if parseXErr != nil {
 			err = parseXErr
 			break
+		}
+		if xType.Paradigms == nil || len(xType.Paradigms) != len(paradigms) {
+			err = errors.Warning("forg: parse index list expr failed").WithCause(errors.Warning("forg: invalid paradigms in x type"))
+			return
+		}
+		for i, paradigm := range xType.Paradigms {
+			paradigms[i].Name = paradigm.Name
 		}
 		typ = &Type{
 			Kind:            ParadigmKind,
