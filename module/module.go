@@ -19,6 +19,7 @@ func New(path string) (v *Module, err error) {
 	v, err = NewWithWork(path, "")
 	return
 }
+
 func NewWithWork(path string, workPath string) (v *Module, err error) {
 	path = filepath.ToSlash(path)
 	if !filepath.IsAbs(path) {
@@ -400,6 +401,35 @@ func (mod *Module) ParseType(ctx context.Context, path string, name string) (typ
 		Mod:        typeModule,
 		Imports:    specImports,
 		GenericDoc: genDoc,
+	})
+	return
+}
+
+func (mod *Module) GetType(path string, name string) (typ *Type, has bool) {
+	key := formatTypeKey(path, name)
+	value, exist := mod.types.values.Load(key)
+	if !exist {
+		return
+	}
+	typ, has = value.(*Type)
+	return
+}
+
+func (mod *Module) Types() (types map[string]*Type) {
+	types = make(map[string]*Type)
+	mod.types.values.Range(func(key, value any) bool {
+		typ, ok := value.(*Type)
+		if !ok {
+			return true
+		}
+		flats := typ.Flats()
+		for k, t := range flats {
+			_, exist := types[k]
+			if !exist {
+				types[k] = t
+			}
+		}
+		return true
 	})
 	return
 }

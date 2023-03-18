@@ -98,6 +98,98 @@ type Type struct {
 	ParadigmsPacked *Type
 }
 
+func (typ *Type) Flats() (v map[string]*Type) {
+	v = make(map[string]*Type)
+	switch typ.Kind {
+	case BuiltinKind, AnyKind:
+		if _, has := v[typ.Key()]; !has {
+			v[typ.Key()] = typ
+		}
+		break
+	case IdentKind, PointerKind, ArrayKind:
+		if _, has := v[typ.Key()]; !has {
+			v[typ.Key()] = typ
+			vv := typ.Elements[0].Flats()
+			for k, t := range vv {
+				if _, has = vv[k]; !has {
+					v[k] = t
+				}
+			}
+		}
+		break
+	case InterfaceKind:
+		if _, has := v[typ.Key()]; !has {
+			v[typ.Key()] = typ
+		}
+		break
+	case StructKind:
+		if _, has := v[typ.Key()]; !has {
+			v[typ.Key()] = typ
+			if typ.Elements != nil && len(typ.Elements) > 0 {
+				for _, element := range typ.Elements {
+					vv := element.Elements[0].Flats()
+					for k, t := range vv {
+						if _, has = vv[k]; !has {
+							v[k] = t
+						}
+					}
+				}
+			}
+		}
+		break
+	case MapKind:
+		if _, has := v[typ.Key()]; !has {
+			v[typ.Key()] = typ
+			vv := typ.Elements[0].Flats()
+			for k, t := range vv {
+				if _, has = vv[k]; !has {
+					v[k] = t
+				}
+			}
+			vv = typ.Elements[1].Flats()
+			for k, t := range vv {
+				if _, has = vv[k]; !has {
+					v[k] = t
+				}
+			}
+		}
+		break
+	case ParadigmKind:
+		if _, has := v[typ.Key()]; !has {
+			v[typ.Key()] = typ
+			vv := typ.Elements[0].Flats()
+			for k, t := range vv {
+				if _, has = vv[k]; !has {
+					v[k] = t
+				}
+			}
+			for _, paradigm := range typ.Paradigms {
+				for _, pt := range paradigm.Types {
+					vv = pt.Flats()
+					for k, t := range vv {
+						if _, has = vv[k]; !has {
+							v[k] = t
+						}
+					}
+				}
+			}
+		}
+
+		if typ.ParadigmsPacked != nil {
+			vv := typ.ParadigmsPacked.Flats()
+			for k, t := range vv {
+				if _, has := vv[k]; !has {
+					v[k] = t
+				}
+			}
+		}
+		break
+	default:
+		break
+	}
+	return
+}
+
 func (typ *Type) String() (v string) {
 	switch typ.Kind {
 	case BasicKind:
