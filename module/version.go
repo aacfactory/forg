@@ -11,6 +11,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 )
 
 const (
@@ -24,6 +25,7 @@ func LatestVersion(path string) (v string, err error) {
 		return
 	}
 	path = strings.ReplaceAll(url.PathEscape(path), "/", "%2F")
+	http.DefaultClient.Timeout = 2 * time.Second
 	resp, getErr := http.Get(fmt.Sprintf("%s/%s", deps, path))
 	if getErr != nil {
 		if errors.Map(getErr).Contains(http.ErrHandlerTimeout) {
@@ -92,6 +94,7 @@ func LatestVersionFromProxy(path string) (v string, err error) {
 		err = errors.Warning("forg: get version from goproxy failed").WithCause(errors.Warning("goproxy is invalid")).WithMeta("path", path)
 		return
 	}
+	http.DefaultClient.Timeout = 2 * time.Second
 	resp, getErr := http.Get(fmt.Sprintf("%s/%s/@v/list", proxy, path))
 	if getErr != nil {
 		err = errors.Warning("forg: get version from goproxy failed").WithCause(getErr).WithMeta("path", path)
