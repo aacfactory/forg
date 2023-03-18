@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/aacfactory/errors"
 	"github.com/aacfactory/forg/codes"
-	"github.com/aacfactory/forg/files"
 	"github.com/aacfactory/forg/module"
 	"github.com/aacfactory/forg/processes"
 	"path/filepath"
@@ -64,60 +63,6 @@ func Load(dir string, options ...Option) (project *Project, err error) {
 	return
 }
 
-func Create(path string, dir string, options ...Option) (project *Project, err error) {
-	opt := &Options{
-		Workspace: "",
-	}
-	if options != nil && len(options) > 0 {
-		for _, option := range options {
-			optionErr := option(opt)
-			if optionErr != nil {
-				err = errors.Warning("forg: create project failed").WithCause(optionErr)
-				return
-			}
-		}
-	}
-	path = strings.TrimSpace(path)
-	if path == "" {
-		err = errors.Warning("forg: create project failed").WithCause(errors.Warning("project path is required"))
-		return
-	}
-	dir = strings.TrimSpace(dir)
-	if dir == "" {
-		err = errors.Warning("forg: create project failed").WithCause(errors.Warning("project dir is required"))
-		return
-	}
-	projectPath, projectPathErr := filepath.Abs(dir)
-	if projectPathErr != nil {
-		err = errors.Warning("forg: create project failed").WithCause(errors.Warning("forg: get absolute representation of project dir failed")).WithMeta("dir", dir)
-		return
-	}
-	projectModuleFile := filepath.ToSlash(filepath.Join(projectPath, "go.mod"))
-	if files.ExistFile(projectModuleFile) {
-		err = errors.Warning("forg: create project failed").WithCause(errors.Warning("forg: go mod file is exit")).WithMeta("mod", projectModuleFile)
-		return
-	}
-	var work *module.Work
-	if opt.Workspace != "" {
-		work = &module.Work{
-			Filename: opt.Workspace,
-			Uses:     nil,
-			Replaces: nil,
-		}
-	}
-	project = &Project{
-		Mod: &module.Module{
-			Dir:      projectPath,
-			Path:     path,
-			Version:  "",
-			Requires: nil,
-			Work:     work,
-			Replace:  nil,
-		},
-	}
-	return
-}
-
 type Project struct {
 	Mod *module.Module
 }
@@ -153,17 +98,5 @@ func (project *Project) Coding(ctx context.Context) (controller processes.Proces
 	process.Add("services: writing", serviceCodeFileUnits...)
 	process.Add("services: deploying", codes.Unit(codes.NewDeploysFile(filepath.ToSlash(filepath.Join(project.Mod.Dir, "modules")), services)))
 	controller = process
-	return
-}
-
-func (project *Project) Writing(ctx context.Context) (controller processes.ProcessController, err error) {
-	// mod code file
-	// work code file
-	// config
-	// hooks
-	// repository
-	// modules
-	// main
-	// go cmd tidy
 	return
 }

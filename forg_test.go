@@ -8,12 +8,17 @@ import (
 )
 
 func TestNew(t *testing.T) {
-	p, pErr := forg.New(`D:\studio\workspace\go\src\github.com\aacfactory\fns-example\standalone\go.mod`)
+	p, pErr := forg.Load(`D:\studio\workspace\go\src\github.com\aacfactory\fns-example\standalone`)
 	if pErr != nil {
 		t.Errorf("%+v", pErr)
 		return
 	}
-	results := p.Start(context.TODO())
+	process, codingErr := p.Coding(context.TODO())
+	if codingErr != nil {
+		t.Errorf("%+v", codingErr)
+		return
+	}
+	results := process.Start(context.TODO())
 	for {
 		result, ok := <-results
 		if !ok {
