@@ -42,7 +42,13 @@ func NewWithWork(path string, workPath string) (v *Module, err error) {
 		return
 	}
 	if workPath != "" {
-		work, parseWorkErr := parseWork(workPath)
+		work := &Work{
+			Filename: workPath,
+			Uses:     nil,
+			Replaces: nil,
+			parsed:   false,
+		}
+		parseWorkErr := work.Parse()
 		if parseWorkErr != nil {
 			err = errors.Warning("forg: new module failed").
 				WithCause(parseWorkErr)
@@ -54,6 +60,11 @@ func NewWithWork(path string, workPath string) (v *Module, err error) {
 				v = use
 				break
 			}
+		}
+		if v == nil {
+			err = errors.Warning("forg: new module failed").
+				WithCause(errors.Warning("can not find in workspace"))
+			return
 		}
 	} else {
 		v = &Module{
@@ -68,12 +79,6 @@ func NewWithWork(path string, workPath string) (v *Module, err error) {
 			services: nil,
 			types:    nil,
 		}
-	}
-	parseErr := v.parse(context.TODO(), nil)
-	if parseErr != nil {
-		err = errors.Warning("forg: new module failed").
-			WithCause(parseErr)
-		return
 	}
 	return
 }
@@ -90,6 +95,11 @@ type Module struct {
 	sources  *Sources
 	services map[string]*Service
 	types    *Types
+}
+
+func (mod *Module) Parse(ctx context.Context) (err error) {
+	err = mod.parse(ctx, nil)
+	return
 }
 
 func (mod *Module) parse(ctx context.Context, host *Module) (err error) {

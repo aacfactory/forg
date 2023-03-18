@@ -14,6 +14,11 @@ func TestParseModule(t *testing.T) {
 		t.Errorf("%+v", createErr)
 		return
 	}
+	parseErr := mod.Parse(context.TODO())
+	if parseErr != nil {
+		t.Errorf("%+v", parseErr)
+		return
+	}
 	fmt.Println(mod)
 
 }
@@ -23,6 +28,11 @@ func TestFunction_Parse(t *testing.T) {
 	mod, modErr := module.New(path)
 	if modErr != nil {
 		t.Errorf("%+v", modErr)
+		return
+	}
+	parseErr := mod.Parse(context.TODO())
+	if parseErr != nil {
+		t.Errorf("%+v", parseErr)
 		return
 	}
 	fmt.Println(mod.String())
@@ -41,9 +51,9 @@ func TestFunction_Parse(t *testing.T) {
 		return
 	}
 	fn := service.Functions[0]
-	parseErr := fn.Parse(context.TODO())
-	if parseErr != nil {
-		t.Errorf("%+v", parseErr)
+	parseFnErr := fn.Parse(context.TODO())
+	if parseFnErr != nil {
+		t.Errorf("%+v", parseFnErr)
 		return
 	}
 	fmt.Println("fn:", fn.Name(), fn.Param.String(), fn.Result.String())

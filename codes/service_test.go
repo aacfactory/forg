@@ -15,6 +15,11 @@ func TestNewServiceFile(t *testing.T) {
 		t.Errorf("%+v", modErr)
 		return
 	}
+	parseErr := mod.Parse(ctx)
+	if parseErr != nil {
+		t.Errorf("%+v", parseErr)
+		return
+	}
 	services, servicesErr := mod.Services()
 	if servicesErr != nil {
 		t.Errorf("%+v", servicesErr)
@@ -23,9 +28,9 @@ func TestNewServiceFile(t *testing.T) {
 	for _, service := range services {
 		functions := service.Functions
 		for _, function := range functions {
-			parseErr := function.Parse(ctx)
-			if parseErr != nil {
-				t.Errorf("%+v", parseErr)
+			parseFnErr := function.Parse(ctx)
+			if parseFnErr != nil {
+				t.Errorf("%+v", parseFnErr)
 				return
 			}
 		}

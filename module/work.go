@@ -10,7 +10,29 @@ import (
 	"sync"
 )
 
-func parseWork(path string) (work *Work, err error) {
+type Work struct {
+	Filename string
+	Uses     []*Module
+	Replaces []*Module
+	parsed   bool
+}
+
+func (work *Work) Use(path string) (v *Module, used bool) {
+	for _, use := range work.Uses {
+		if use.Path == path {
+			v = use
+			used = true
+			break
+		}
+	}
+	return
+}
+
+func (work *Work) Parse() (err error) {
+	if work.parsed {
+		return
+	}
+	path := work.Filename
 	if !filepath.IsAbs(path) {
 		absolute, absoluteErr := filepath.Abs(path)
 		if absoluteErr != nil {
@@ -37,10 +59,9 @@ func parseWork(path string) (work *Work, err error) {
 		err = errors.Warning("forg: parse work failed").WithMeta("work", path).WithCause(parseErr)
 		return
 	}
-	work = &Work{
-		Uses:     make([]*Module, 0, 1),
-		Replaces: make([]*Module, 0, 1),
-	}
+	work.Filename = path
+	work.Uses = make([]*Module, 0, 1)
+	work.Replaces = make([]*Module, 0, 1)
 	if file.Use != nil && len(file.Use) > 0 {
 		for _, use := range file.Use {
 			usePath := use.Path
@@ -49,7 +70,7 @@ func parseWork(path string) (work *Work, err error) {
 			} else {
 				usePath = filepath.ToSlash(filepath.Join(dir, usePath))
 			}
-			moduleFile := filepath.ToSlash(filepath.Join(usePath, "mod.go"))
+			moduleFile := filepath.ToSlash(filepath.Join(usePath, "go.mod"))
 			if !files.ExistFile(moduleFile) {
 				err = errors.Warning("forg: parse work failed").WithMeta("work", path).
 					WithCause(errors.Warning("forg: mod file was not found").
@@ -140,21 +161,6 @@ func parseWork(path string) (work *Work, err error) {
 			})
 		}
 	}
-	return
-}
-
-type Work struct {
-	Uses     []*Module
-	Replaces []*Module
-}
-
-func (work *Work) Use(path string) (v *Module, used bool) {
-	for _, use := range work.Uses {
-		if use.Path == path {
-			v = use
-			used = true
-			break
-		}
-	}
+	work.parsed = true
 	return
 }
