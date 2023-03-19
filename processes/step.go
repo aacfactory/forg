@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"github.com/aacfactory/errors"
-	"sync"
 )
 
 type Unit func(ctx context.Context) (result interface{}, err error)
@@ -48,7 +47,7 @@ func (step *Step) Execute(ctx context.Context) (err error) {
 		return
 	}
 	unitNum := int64(len(step.units))
-	wg := sync.WaitGroup{}
+	stepResultCh := make(chan Result, unitNum)
 	for i, unit := range step.units {
 		unitNo := int64(i + 1)
 		if unit == nil {
@@ -63,17 +62,24 @@ func (step *Step) Execute(ctx context.Context) (err error) {
 			}
 			continue
 		}
-		wg.Add(1)
-		go func(ctx context.Context, wg *sync.WaitGroup, unitNo int64, unit Unit, step *Step) {
-			defer wg.Done()
+		go func(ctx context.Context, unitNo int64, unit Unit, step *Step, stepResultCh chan Result) {
 			if ctx.Err() != nil {
+				stepResultCh <- Result{
+					StepNo:   step.no,
+					StepNum:  step.num,
+					StepName: step.name,
+					UnitNo:   unitNo,
+					UnitNum:  unitNum,
+					Data:     nil,
+					Error:    ctx.Err(),
+				}
 				return
 			}
 			data, unitErr := unit(ctx)
 			defer func() {
 				_ = recover()
 			}()
-			step.resultCh <- Result{
+			stepResultCh <- Result{
 				StepNo:   step.no,
 				StepNum:  step.num,
 				StepName: step.name,
@@ -82,8 +88,25 @@ func (step *Step) Execute(ctx context.Context) (err error) {
 				Data:     data,
 				Error:    unitErr,
 			}
-		}(ctx, &wg, unitNo, unit, step)
+		}(ctx, unitNo, unit, step, stepResultCh)
 	}
-	wg.Wait()
+	resultErrs := errors.MakeErrors()
+	executed := int64(0)
+	for {
+		result, ok := <-stepResultCh
+		if !ok {
+			err = errors.Warning("forg: panic")
+			break
+		}
+		if result.Error != nil {
+			resultErrs.Append(result.Error)
+		}
+		step.resultCh <- result
+		executed++
+		if executed >= unitNum {
+			break
+		}
+	}
+	err = resultErrs.Error()
 	return
 }

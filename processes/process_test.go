@@ -20,7 +20,7 @@ func (unit *WorkUnit) Execute(ctx context.Context) (message interface{}, err err
 		err = ctx.Err()
 		return
 	}
-	if unit.no%2 == 0 {
+	if unit.no%2 == 1 {
 		err = errors.ServiceError("failed")
 	} else {
 		unit.value = unit.no
