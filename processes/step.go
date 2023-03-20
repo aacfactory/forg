@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/aacfactory/errors"
+	"unicode/utf8"
 )
 
 type Unit interface {
@@ -21,7 +22,9 @@ type Result struct {
 }
 
 func (result Result) String() string {
-	status := "√"
+	succeed := make([]byte, utf8.RuneLen(rune('√')))
+	utf8.EncodeRune(succeed, rune('√'))
+	status := string(succeed)
 	if result.Error != nil {
 		if IsAbortErr(result.Error) {
 			status = "aborted"
