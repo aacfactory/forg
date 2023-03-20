@@ -6,7 +6,9 @@ import (
 	"github.com/aacfactory/errors"
 )
 
-type Unit func(ctx context.Context) (result interface{}, err error)
+type Unit interface {
+	Handle(ctx context.Context) (result interface{}, err error)
+}
 
 type Result struct {
 	StepNo   int64
@@ -75,7 +77,7 @@ func (step *Step) Execute(ctx context.Context) (err error) {
 				}
 				return
 			}
-			data, unitErr := unit(ctx)
+			data, unitErr := unit.Handle(ctx)
 			defer func() {
 				_ = recover()
 			}()

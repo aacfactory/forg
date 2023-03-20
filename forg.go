@@ -2,7 +2,6 @@ package forg
 
 import (
 	"context"
-	"fmt"
 	"github.com/aacfactory/errors"
 	"github.com/aacfactory/forg/codes"
 	"github.com/aacfactory/forg/module"
@@ -83,20 +82,13 @@ func (project *Project) Coding(ctx context.Context) (controller processes.Proces
 	serviceCodeFileUnits := make([]processes.Unit, 0, 1)
 	for _, service := range services {
 		for _, function := range service.Functions {
-			functionParseUnits = append(functionParseUnits, func(ctx context.Context) (result interface{}, err error) {
-				err = function.Parse(ctx)
-				if err != nil {
-					return
-				}
-				result = fmt.Sprintf("%s/%s: parse succeed", function.HostServiceName(), function.Name())
-				return
-			})
+			functionParseUnits = append(functionParseUnits, function)
 		}
 		serviceCodeFileUnits = append(serviceCodeFileUnits, codes.Unit(codes.NewServiceFile(service)))
 	}
 	process.Add("services: parsing", functionParseUnits...)
 	process.Add("services: writing", serviceCodeFileUnits...)
-	process.Add("services: deploying", codes.Unit(codes.NewDeploysFile(filepath.ToSlash(filepath.Join(project.Mod.Dir, "modules")), services)))
+	process.Add("services: deploys", codes.Unit(codes.NewDeploysFile(filepath.ToSlash(filepath.Join(project.Mod.Dir, "modules")), services)))
 	controller = process
 	return
 }

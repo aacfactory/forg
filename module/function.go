@@ -328,6 +328,15 @@ func (f *Function) parseFieldType(ctx context.Context, e ast.Expr) (typ *Type, e
 	return
 }
 
+func (f *Function) Handle(ctx context.Context) (result interface{}, err error) {
+	err = f.Parse(ctx)
+	if err != nil {
+		return
+	}
+	result = fmt.Sprintf("%s/%s: parse succeed", f.HostServiceName(), f.Name())
+	return
+}
+
 type Functions []*Function
 
 func (fns Functions) Len() int {

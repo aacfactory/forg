@@ -15,7 +15,7 @@ type WorkUnit struct {
 	value int
 }
 
-func (unit *WorkUnit) Execute(ctx context.Context) (message interface{}, err error) {
+func (unit *WorkUnit) Handle(ctx context.Context) (message interface{}, err error) {
 	if ctx.Err() != nil {
 		err = ctx.Err()
 		return
@@ -40,7 +40,7 @@ func TestNew(t *testing.T) {
 			no:   i,
 		}
 		units = append(units, unit)
-		process.Add(name, unit.Execute)
+		process.Add(name, unit)
 	}
 
 	results := process.Start(context.TODO())
@@ -66,7 +66,7 @@ func TestParallelUnits(t *testing.T) {
 				name: fmt.Sprintf("s:%d:%d", i, j),
 				no:   i,
 			}
-			subs = append(subs, unit.Execute)
+			subs = append(subs, unit)
 		}
 		process.Add(fmt.Sprintf("s:%d", i), subs...)
 	}

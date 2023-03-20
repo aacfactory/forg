@@ -10,13 +10,21 @@ type CodeFile interface {
 	Write(ctx context.Context) (err error)
 }
 
-func Unit(file CodeFile) (unit processes.Unit) {
-	return func(ctx context.Context) (result interface{}, err error) {
-		err = file.Write(ctx)
-		if err != nil {
-			return
-		}
-		result = file.Name()
+type CodeFileUnit struct {
+	cf CodeFile
+}
+
+func (unit *CodeFileUnit) Handle(ctx context.Context) (result interface{}, err error) {
+	err = unit.cf.Write(ctx)
+	if err != nil {
 		return
+	}
+	result = unit.cf.Name()
+	return
+}
+
+func Unit(file CodeFile) (unit processes.Unit) {
+	return &CodeFileUnit{
+		cf: file,
 	}
 }
