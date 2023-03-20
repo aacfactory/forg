@@ -495,7 +495,7 @@ func (s *ServiceFile) serviceHandleCode(ctx context.Context) (code gcg.Code, err
 				functionExecCode.Token("// sql commit transaction").Line()
 				functionExecCode.Token("if err == nil {").Line()
 				functionExecCode.Tab().Token("commitTransactionErr := sql.CommitTransaction(ctx)", gcg.NewPackage("github.com/aacfactory/fns-contrib/databases/sql")).Line()
-				functionExecCode.Tab().Token("if commitTransactionErr == nil {").Line()
+				functionExecCode.Tab().Token("if commitTransactionErr != nil {").Line()
 				functionExecCode.Tab().Tab().Token("_ = sql.RollbackTransaction(ctx)", gcg.NewPackage("github.com/aacfactory/fns-contrib/databases/sql")).Line()
 				functionExecCode.Tab().Tab().Token(fmt.Sprintf("err = errors.ServiceError(\"%s: commit sql transaction failed\").WithCause(commitTransactionErr)", s.service.Name)).Line()
 				functionExecCode.Tab().Tab().Return().Line()
