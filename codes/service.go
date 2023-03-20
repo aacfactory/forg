@@ -224,7 +224,7 @@ func (s *ServiceFile) proxyFunctionsCode(ctx context.Context) (code gcg.Code, er
 		body.Tab().Tab().Return().Line()
 		body.Tab().Token("}").Line()
 		if function.Param == nil {
-			body.Tab().Token("argument := service.Empty").Line()
+			body.Tab().Token("argument := service.Empty{}").Line()
 		}
 		bodyArgumentCode := gcg.Statements().Token("service.NewArgument(argument)")
 		bodyRequestCode := gcg.Statements().Token(fmt.Sprintf("service.NewRequest(ctx, _name, %s, ", constIdent)).Add(bodyArgumentCode).Symbol(")")

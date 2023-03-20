@@ -2,6 +2,7 @@ package codes_test
 
 import (
 	"context"
+	"fmt"
 	"github.com/aacfactory/forg/codes"
 	"github.com/aacfactory/forg/module"
 	"testing"
@@ -33,6 +34,7 @@ func TestNewServiceFile(t *testing.T) {
 				t.Errorf("%+v", parseFnErr)
 				return
 			}
+			fmt.Println("fn:", function.Name(), function.Param, function.Result)
 		}
 	}
 	for _, service := range services {

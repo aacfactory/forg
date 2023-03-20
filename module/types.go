@@ -193,11 +193,15 @@ func (typ *Type) Flats() (v map[string]*Type) {
 }
 
 func (typ *Type) String() (v string) {
+	if typ.Path != "" && typ.Name != "" {
+		v = typ.Key()
+		return
+	}
 	switch typ.Kind {
 	case BasicKind:
 		v = typ.Name
 		break
-	case BuiltinKind, IdentKind, InterfaceKind, StructKind, StructFieldKind, PointerKind:
+	case BuiltinKind, IdentKind, InterfaceKind, StructKind, StructFieldKind, PointerKind, ReferenceKind:
 		v = typ.Key()
 		break
 	case ArrayKind:
@@ -218,6 +222,9 @@ func (typ *Type) String() (v string) {
 			elements = elements[2:]
 		}
 		v = fmt.Sprintf("[%s %s]", typ.Name, elements)
+		break
+	default:
+		v = typ.Key()
 		break
 	}
 	return
@@ -752,6 +759,7 @@ func (types *Types) parseExpr(ctx context.Context, x ast.Expr, scope *TypeScope)
 				break
 			} else {
 				typ, err = scope.Mod.ParseType(ctx, scope.Path, expr.Name)
+				//err = errors.Warning("forg: kind of ident expr object must be type and decl must not be nil")
 				break
 			}
 		}

@@ -288,7 +288,24 @@ func (f *Function) parseField(ctx context.Context, field *ast.Field) (v *Functio
 
 func (f *Function) parseFieldType(ctx context.Context, e ast.Expr) (typ *Type, err error) {
 	switch e.(type) {
-	case *ast.Ident, *ast.SelectorExpr:
+	case *ast.Ident:
+		typ, err = f.mod.types.parseExpr(ctx, e, &TypeScope{
+			Path:       f.path,
+			Mod:        f.mod,
+			Imports:    f.imports,
+			GenericDoc: "",
+		})
+		if err != nil {
+			return
+		}
+		_, isBasic := typ.Basic()
+		if isBasic {
+			err = errors.Warning("forg: field type only support value object")
+			return
+		}
+		typ.Path = f.path
+		typ.Name = e.(*ast.Ident).Name
+	case *ast.SelectorExpr:
 		typ, err = f.mod.types.parseExpr(ctx, e, &TypeScope{
 			Path:       f.path,
 			Mod:        f.mod,
