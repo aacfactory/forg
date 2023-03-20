@@ -23,7 +23,7 @@ const (
 	AnyKind
 	ParadigmKind
 	ParadigmElementKind
-	referenceKind
+	ReferenceKind
 )
 
 type TypeKind int
@@ -54,6 +54,8 @@ func (kind TypeKind) String() string {
 		return "paradigm"
 	case ParadigmElementKind:
 		return "paradigm_element"
+	case ReferenceKind:
+		return "reference"
 	}
 	return "unknown"
 }
@@ -260,38 +262,6 @@ func (typ *Type) Basic() (name string, ok bool) {
 	return
 }
 
-func (typ *Type) warpReference(types *Types) {
-	if typ.Elements != nil && len(typ.Elements) > 0 {
-		for i, element := range typ.Elements {
-			if element.Kind == referenceKind {
-				ref, has := types.values.Load(typ.Key())
-				if has {
-					typ.Elements[i] = ref.(*Type)
-					element = ref.(*Type)
-				}
-			}
-			element.warpReference(types)
-		}
-	}
-	if typ.Paradigms != nil && len(typ.Paradigms) > 0 {
-		for _, paradigm := range typ.Paradigms {
-			if paradigm.Types != nil && len(paradigm.Types) > 0 {
-				for i, pt := range paradigm.Types {
-					if pt.Kind == referenceKind {
-						ref, has := types.values.Load(typ.Key())
-						if has {
-							typ.Elements[i] = ref.(*Type)
-							pt = ref.(*Type)
-						}
-					}
-					pt.warpReference(types)
-				}
-			}
-		}
-	}
-	return
-}
-
 func (typ *Type) Copied() (v *Type) {
 	v = &Type{
 		Kind:            typ.Kind,
@@ -478,7 +448,7 @@ func (types *Types) parseType(ctx context.Context, spec *ast.TypeSpec, scope *Ty
 	processing := ctx.Value(key)
 	if processing != nil {
 		typ = &Type{
-			Kind:        referenceKind,
+			Kind:        ReferenceKind,
 			Path:        path,
 			Name:        name,
 			Annotations: nil,
@@ -672,8 +642,6 @@ func (types *Types) parseType(ctx context.Context, spec *ast.TypeSpec, scope *Ty
 			return
 		}
 		types.values.Store(key, result)
-		// warp referenceKind
-		result.warpReference(types)
 		v = result
 		return
 	})
@@ -783,7 +751,7 @@ func (types *Types) parseExpr(ctx context.Context, x ast.Expr, scope *TypeScope)
 				}
 				break
 			} else {
-				err = errors.Warning("forg: unsupported ident expr").WithMeta("ident", expr.Name)
+				typ, err = scope.Mod.ParseType(ctx, scope.Path, expr.Name)
 				break
 			}
 		}

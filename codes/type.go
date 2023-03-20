@@ -55,6 +55,9 @@ func MapTypeToFunctionElementCode(ctx context.Context, typ *module.Type) (code g
 	case module.ParadigmElementKind:
 		code, err = mapParadigmElementTypeToFunctionElementCode(ctx, typ)
 		break
+	case module.ReferenceKind:
+		code, err = mapReferenceTypeToFunctionElementCode(ctx, typ)
+		break
 	default:
 		err = errors.Warning("forg: mapping type to function document element code failed").
 			WithMeta("path", typ.Path).WithMeta("name", typ.Name).WithMeta("kind", typ.Kind.String()).
@@ -107,6 +110,38 @@ func mapBasicTypeToFunctionElementCode(ctx context.Context, typ *module.Type) (c
 		stmt.Token(fmt.Sprintf("documents.Complex128()"))
 		break
 	default:
+		if typ.Path == "time" && typ.Name == "Time" {
+			stmt.Token(fmt.Sprintf("documents.DateTime()"))
+			break
+		}
+		if typ.Path == "time" && typ.Name == "Duration" {
+			stmt.Token(fmt.Sprintf("documents.Duration()"))
+			break
+		}
+		if typ.Path == "github.com/aacfactory/json" && typ.Name == "Date" {
+			stmt.Token(fmt.Sprintf("documents.Date()"))
+			break
+		}
+		if typ.Path == "github.com/aacfactory/json" && typ.Name == "Time" {
+			stmt.Token(fmt.Sprintf("documents.Time()"))
+			break
+		}
+		if typ.Path == "github.com/aacfactory/fns-contrib/databases/sql" && typ.Name == "Date" {
+			stmt.Token(fmt.Sprintf("documents.Date()"))
+			break
+		}
+		if typ.Path == "github.com/aacfactory/fns-contrib/databases/sql" && typ.Name == "Time" {
+			stmt.Token(fmt.Sprintf("documents.Time()"))
+			break
+		}
+		if typ.Path == "encoding/json" && typ.Name == "RawMessage" {
+			stmt.Token(fmt.Sprintf("documents.JsonRaw()"))
+			break
+		}
+		if typ.Path == "github.com/aacfactory/json" && typ.Name == "RawMessage" {
+			stmt.Token(fmt.Sprintf("documents.JsonRaw()"))
+			break
+		}
 		err = errors.Warning("forg: unsupported basic type").WithMeta("name", typ.Name)
 		return
 	}
@@ -442,5 +477,16 @@ func mapParadigmElementTypeToFunctionElementCode(ctx context.Context, typ *modul
 			WithCause(err)
 		return
 	}
+	return
+}
+
+func mapReferenceTypeToFunctionElementCode(ctx context.Context, typ *module.Type) (code gcg.Code, err error) {
+	if ctx.Err() != nil {
+		err = errors.Warning("forg: mapping reference type to function document element code failed").
+			WithMeta("path", typ.Path).WithMeta("name", typ.Name).WithMeta("kind", typ.Kind.String()).
+			WithCause(ctx.Err())
+		return
+	}
+	code = gcg.Statements().Token(fmt.Sprintf("documents.Ref(\"%s\", \"%s\")", typ.Path, typ.Name))
 	return
 }
