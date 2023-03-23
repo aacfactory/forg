@@ -24,12 +24,12 @@ type Result struct {
 func (result Result) String() string {
 	succeed := make([]byte, utf8.RuneLen(rune('√')))
 	utf8.EncodeRune(succeed, rune('√'))
-	status := string(succeed)
+	status := "succeed"
 	if result.Error != nil {
 		if IsAbortErr(result.Error) {
 			status = "aborted"
 		} else {
-			status = "x"
+			status = " failed"
 		}
 	}
 	return fmt.Sprintf("[%d/%d] %s [%d/%d] %s", result.StepNo, result.StepNum, result.StepName, result.UnitNo, result.UnitNum, status)
