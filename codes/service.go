@@ -227,7 +227,7 @@ func (s *ServiceFile) proxyFunctionsCode(ctx context.Context) (code gcg.Code, er
 			body.Tab().Token("argument := service.Empty{}").Line()
 		}
 		bodyArgumentCode := gcg.Statements().Token("service.NewArgument(argument)")
-		bodyRequestCode := gcg.Statements().Token(fmt.Sprintf("service.NewRequest(ctx, _name, %s, ", constIdent)).Add(bodyArgumentCode).Symbol(")")
+		bodyRequestCode := gcg.Statements().Token(fmt.Sprintf("service.NewRequest(ctx, _name, %s, ", constIdent)).Add(bodyArgumentCode).Symbol(",").Token("service.WithInternalRequest()").Symbol(")")
 		if function.Result == nil {
 			body.Tab().Token("_, err = endpoint.RequestSync(ctx, ").Add(bodyRequestCode).Symbol(")").Line()
 		} else {
