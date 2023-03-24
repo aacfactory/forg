@@ -17,6 +17,16 @@ func tryGetBuiltinType(path string, name string) (typ *Type, has bool) {
 }
 
 func init() {
+	// password
+	RegisterBuiltinType(&Type{
+		Kind:        BasicKind,
+		Path:        "github.com/aacfactory/fns/commons/passwords",
+		Name:        "Password",
+		Annotations: nil,
+		Paradigms:   nil,
+		Tags:        nil,
+		Elements:    nil,
+	})
 	// time
 	RegisterBuiltinType(&Type{
 		Kind:        BasicKind,

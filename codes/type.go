@@ -118,6 +118,10 @@ func mapBasicTypeToFunctionElementCode(ctx context.Context, typ *module.Type) (c
 			stmt.Token(fmt.Sprintf("documents.Duration()"))
 			break
 		}
+		if typ.Path == "github.com/aacfactory/fns/commons/passwords" && typ.Name == "Password" {
+			stmt.Token(fmt.Sprintf("documents.Password()"))
+			break
+		}
 		if typ.Path == "github.com/aacfactory/json" && typ.Name == "Date" {
 			stmt.Token(fmt.Sprintf("documents.Date()"))
 			break
@@ -294,6 +298,11 @@ func mapStructFieldTypeToFunctionElementCode(ctx context.Context, typ *module.Ty
 	_, hasFieldDeprecated := typ.Annotations.Get("deprecated")
 	if hasFieldDeprecated {
 		stmt = stmt.Dot().Line().Token("AsDeprecated()")
+	}
+	// password
+	_, hasFieldPassword := typ.Annotations.Get("password")
+	if hasFieldPassword {
+		stmt = stmt.Dot().Line().Token("AsPassword()")
 	}
 	// enum
 	fieldEnum, hasFieldEnum := typ.Annotations["enum"]
