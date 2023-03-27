@@ -380,29 +380,16 @@ func (s *ServiceFile) serviceHandleCode(ctx context.Context) (code gcg.Code, err
 			// authorization
 			if function.Authorization() {
 				functionCode.Token("// verify authorizations").Line()
-				functionCode.Token("err = authorizations.Verify(ctx)", gcg.NewPackage("github.com/aacfactory/fns/endpoints/authorizations")).Line()
+				functionCode.Token("err = authorizations.ParseContext(ctx)", gcg.NewPackage("github.com/aacfactory/fns/service/builtin/authorizations")).Line()
 				functionCode.Token("if err != nil {").Line()
 				functionCode.Tab().Break().Line()
 				functionCode.Token("}").Line()
 			}
 			// permission
-			if kind, has := function.Permission(); has {
+			if function.Permission() {
 				functionCode.Token("// verify permissions").Line()
-				idx := strings.LastIndex(kind, "/")
-				if idx < 0 || idx == len(kind)-1 {
-					err = errors.Warning("forg: kind of function is invalid").
-						WithMeta("kind", "service").WithMeta("service", s.service.Name).WithMeta("file", s.Name()).
-						WithMeta("function", function.Name())
-					return
-				}
-				kindIdent := kind[idx+1:]
-				functionCode.Token(fmt.Sprintf("enforced, enforceErr := %s.EnforceRequest(ctx, _name, %s)", kindIdent, function.ConstIdent), gcg.NewPackage(kind)).Line()
-				functionCode.Token("if enforceErr != nil {").Line()
-				functionCode.Tab().Token(fmt.Sprintf("err = errors.Warning(\"%s: enforce request failed\").WithCause(enforceErr)", s.service.Name)).Line()
-				functionCode.Tab().Break().Line()
-				functionCode.Token("}").Line()
-				functionCode.Token("if !enforced {").Line()
-				functionCode.Tab().Token("err = errors.Forbidden(\"forbidden\")").Line()
+				functionCode.Token("err = permissions.EnforceContext(ctx, _name, fn)", gcg.NewPackage("github.com/aacfactory/fns/service/builtin/permissions")).Line()
+				functionCode.Token("if err != nil {").Line()
 				functionCode.Tab().Break().Line()
 				functionCode.Token("}").Line()
 			}

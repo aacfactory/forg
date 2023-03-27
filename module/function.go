@@ -141,20 +141,8 @@ func (f *Function) Authorization() (ok bool) {
 	return
 }
 
-func (f *Function) Permission() (kind string, ok bool) {
-	kind, ok = f.Annotations["permission"]
-	if !ok {
-		return
-	}
-	kind = strings.TrimSpace(kind)
-	if kind == "" {
-		kind = "github.com/aacfactory/fns/endpoints/rbac"
-		return
-	}
-	if kind == "rbac" {
-		kind = "github.com/aacfactory/fns/endpoints/rbac"
-		return
-	}
+func (f *Function) Permission() (ok bool) {
+	_, ok = f.Annotations["permission"]
 	return
 }
 
